@@ -1,243 +1,498 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tofu Hawking – Field Assistant</title>
-  <style>
-    :root{--bg:#f8f8f8;--card:#ffffff;--ink:#1f2937;--muted:#6b7280;--accent:#b45309;--ok:#065f46;--bad:#991b1b;--ring:#f59e0b}
-    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
-    .wrap{max-width:1100px;margin:auto;padding:20px}
-    h1{font-size:22px;margin:10px 0 16px}
-    .card{background:var(--card);border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.06);padding:18px;margin-bottom:18px;border:1px solid #eee}
-    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
-    .col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-6{grid-column:span 6}.col-8{grid-column:span 8}.col-12{grid-column:span 12}
-    label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
-    input,select{width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:var(--ink);outline:none}
-    input:focus{border-color:var(--ring);box-shadow:0 0 0 3px rgba(245,158,11,.2)}
-    .row{display:flex;gap:10px;align-items:center}
-    .btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:12px;padding:10px 14px;cursor:pointer;background:#111827;color:#fff}
-    .btn.secondary{background:#f3f4f6;color:#111827}
-    .btn.warn{background:#f59e0b}
-    .btn:disabled{opacity:.5;cursor:not-allowed}
-    .right{justify-content:flex-end}
-    table{width:100%;border-collapse:separate;border-spacing:0;overflow:auto}
-    th,td{padding:10px 12px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap}
-    th{font-size:12px;color:#6b7280}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}
-    .ok{background:#ecfdf5;color:var(--ok)}
-    .bad{background:#fef2f2;color:var(--bad)}
-    .accent{color:var(--accent)}
-    .note{font-size:12px;color:var(--muted)}
-    .totals{font-weight:600}
-    .divider{height:1px;background:#eee;margin:10px 0}
-  </style>
-  <!-- SheetJS for XLSX export -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-</head>
-<body>
-  <div class="wrap">
-    <h1>Tofu Hawking – Field Assistant</h1>
-    <div class="card">
-      <div class="grid">
-        <div class="col-3"><label>Date</label><input type="date" id="date" /></div>
-        <div class="col-3"><label>SA name</label><input id="sa" placeholder="e.g., Nicholas"/></div>
-        <div class="col-3"><label>Unit price – in kg (UGX)</label><input id="pKg" type="number" inputmode="numeric" value="10000"/></div>
-        <div class="col-3"><label>Unit price – in portion (UGX)</label><input id="pPortion" type="number" inputmode="numeric" value="500"/></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BA payment</title>
+    <meta name="description" content="BA payment – Record and calculate daily agent sales." />
 
-        <div class="col-3"><label>Stock issued – in kg</label><input id="issuedKg" type="number" step="0.01"/></div>
-        <div class="col-3"><label>Stock issued – in portion</label><input id="issuedPortion" type="number" step="1"/></div>
-        <div class="col-3"><label>Balance – in kg</label><input id="balKg" type="number" step="0.01"/></div>
-        <div class="col-3"><label>Balance – in portion</label><input id="balPortion" type="number" step="1"/></div>
-
-        <div class="col-3"><label>Cash collected (UGX)</label><input id="cash" type="number" inputmode="numeric"/></div>
-        <div class="col-3"><label>Commission rate</label>
-          <div class="row"><input id="rate" type="number" min="0" max="100" value="20"/><span class="note">%</span></div>
-        </div>
-        <div class="col-6 right"><button class="btn" id="add">Add entry</button></div>
-      </div>
-      <div class="divider"></div>
-      <div class="grid">
-        <div class="col-3"><label>Total value of stock given (UGX)</label><div id="vStock" class="accent">0</div></div>
-        <div class="col-3"><label>Discrepancies (UGX)</label><div id="disc" class="accent">0</div></div>
-        <div class="col-3"><label>Commission (UGX)</label><div id="comm" class="accent">0</div></div>
-        <div class="col-3"><label>Total amount to be paid (UGX)</label><div id="toPay" class="accent">0</div></div>
-      </div>
-      <div class="note" style="margin-top:8px">Formulae: Value of stock = (issuedKg*pKg)+(issuedPortion*pPortion). Discrepancies = Value of stock − Cash collected. Commission = Cash*rate%. Amount to be paid = Commission − MAX(Discrepancies,0) + (balKg*pKg)+(balPortion*pPortion).</div>
-    </div>
-
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <strong>Entries</strong>
-        <div>
-          <button class="btn secondary" id="exportXLSX">Export XLSX</button>
-          <button class="btn secondary" id="export">Export CSV</button>
-          <button class="btn warn" id="clear">Clear all</button>
-        </div>
-      </div>
-      <div style="overflow:auto">
-        <table id="tbl">
-          <thead>
-            <tr>
-              <th>Date</th><th>SA</th>
-              <th>Unit/kg</th><th>Unit/portion</th>
-              <th>Stock value</th>
-              <th>Issued kg</th><th>Issued portion</th>
-              <th>Balance kg</th><th>Balance portion</th>
-              <th>Cash</th><th>Discrep.</th><th>Comm.</th><th>To pay</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-          <tfoot>
-            <tr class="totals">
-              <td colspan="4">Totals</td>
-              <td id="tStock">0</td>
-              <td id="tIssuedKg">0</td>
-              <td id="tIssuedPortion">0</td>
-              <td id="tBalKg">0</td>
-              <td id="tBalPortion">0</td>
-              <td id="tCash">0</td>
-              <td id="tDisc">0</td>
-              <td id="tComm">0</td>
-              <td id="tPay">0</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      <div class="note">Data is saved locally on this device (browser localStorage).</div>
-    </div>
-  </div>
-
-  <script>
-    const el = id => document.getElementById(id);
-    const fmt = n => (isNaN(n)?0:n).toLocaleString('en-UG',{maximumFractionDigits:0});
-
-    const inputs = ['date','sa','pKg','pPortion','issuedKg','issuedPortion','balKg','balPortion','cash','rate'].map(el);
-    inputs.forEach(i=> i.addEventListener('input', recalc));
-
-    function numbers(){
-      return {
-        pKg:+el('pKg').value||0,
-        pPortion:+el('pPortion').value||0,
-        issuedKg:+el('issuedKg').value||0,
-        issuedPortion:+el('issuedPortion').value||0,
-        balKg:+el('balKg').value||0,
-        balPortion:+el('balPortion').value||0,
-        cash:+el('cash').value||0,
-        rate:+el('rate').value||0
+    <style>
+      /* Color palette */
+      :root {
+        --beige: #f6f3dd;
+        --green: #028b43;
+        --orange: #f8a925;
+        --bg: var(--beige);
+        --text: #0b1220;
+        --muted: #475569;
+        --card: #ffffff;
+        --border: #e5e7eb;
       }
-    }
+      * { box-sizing: border-box; }
+      html, body { margin:0; padding:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; background: var(--bg); color: var(--text); }
+      a { color: var(--green); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .container { width: min(1100px, 94%); margin: 0 auto; }
+      header { position: sticky; top: 0; backdrop-filter: blur(6px); background: color-mix(in oklab, var(--beige) 65%, #fff 35%); border-bottom: 1px solid var(--border); z-index: 10; }
+      .nav { display:flex; align-items:center; justify-content:space-between; padding: 14px 0; }
+      .brand { display:flex; align-items:center; gap:10px; font-weight:800; }
+      .logo { width: 30px; height: 30px; border-radius: 10px; background: var(--green); color: #fff; display:grid; place-items:center; font-weight:900; }
+      .menu { display:flex; gap:16px; color: var(--muted);
+      }
 
-    function calc(){
-      const n = numbers();
-      const stockVal = (n.issuedKg*n.pKg) + (n.issuedPortion*n.pPortion);
-      const disc = stockVal - n.cash; // positive = shortfall
-      const comm = n.cash * (n.rate/100);
-      const toPay = comm - Math.max(disc,0) + (n.balKg*n.pKg) + (n.balPortion*n.pPortion);
-      return {stockVal,disc,comm,toPay};
-    }
+      /* Layout */
+      main { padding: 26px 0; }
+      .grid { display:grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+      .card { grid-column: span 12; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 6px 20px rgba(2,139,67,0.06); }
+      @media (min-width: 860px) {
+        .card.sm-6 { grid-column: span 6; }
+        .card.sm-4 { grid-column: span 4; }
+      }
 
-    function recalc(){
-      const {stockVal,disc,comm,toPay} = calc();
-      el('vStock').textContent = fmt(stockVal);
-      el('disc').textContent = fmt(disc);
-      el('comm').textContent = fmt(comm);
-      el('toPay').textContent = fmt(toPay);
-    }
+      h1 { font-size: clamp(28px, 4vw, 40px); margin: 10px 0 0; }
+      h2 { font-size: 20px; margin: 0 0 12px; }
+      h3 { font-size: 18px; margin: 0 0 10px; }
 
-    function load(){
-      const raw = localStorage.getItem('tofu-hawking-entries');
-      return raw? JSON.parse(raw): [];
-    }
-    function save(rows){
-      localStorage.setItem('tofu-hawking-entries', JSON.stringify(rows));
-    }
+      .hero { padding: 28px 0 10px; }
+      .eyebrow { color: var(--muted); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 12px; }
+      .cta { margin-top: 14px; display:flex; gap:10px; flex-wrap: wrap; }
 
-    function render(){
-      const tbody = document.querySelector('#tbl tbody');
-      tbody.innerHTML='';
-      const rows = load();
-      let t={stock:0,issuedKg:0,issuedPortion:0,balKg:0,balPortion:0,cash:0,disc:0,comm:0,pay:0};
-      rows.forEach((r,i)=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${r.date||''}</td>
-          <td>${r.sa||''}</td>
-          <td>${fmt(r.pKg)}</td>
-          <td>${fmt(r.pPortion)}</td>
-          <td>${fmt(r.stockVal)}</td>
-          <td>${fmt(r.issuedKg)}</td>
-          <td>${fmt(r.issuedPortion)}</td>
-          <td>${fmt(r.balKg)}</td>
-          <td>${fmt(r.balPortion)}</td>
-          <td>${fmt(r.cash)}</td>
-          <td><span class="pill ${r.disc>0?'bad':'ok'}">${fmt(r.disc)}</span></td>
-          <td>${fmt(r.comm)}</td>
-          <td>${fmt(r.toPay)}</td>`;
-        tbody.appendChild(tr);
-        t.stock+=r.stockVal; t.issuedKg+=r.issuedKg; t.issuedPortion+=r.issuedPortion;
-        t.balKg+=r.balKg; t.balPortion+=r.balPortion; t.cash+=r.cash; t.disc+=r.disc; t.comm+=r.comm; t.pay+=r.toPay;
-      });
-      el('tStock').textContent=fmt(t.stock);
-      el('tIssuedKg').textContent=fmt(t.issuedKg);
-      el('tIssuedPortion').textContent=fmt(t.issuedPortion);
-      el('tBalKg').textContent=fmt(t.balKg);
-      el('tBalPortion').textContent=fmt(t.balPortion);
-      el('tCash').textContent=fmt(t.cash);
-      el('tDisc').textContent=fmt(t.disc);
-      el('tComm').textContent=fmt(t.comm);
-      el('tPay').textContent=fmt(t.pay);
-    }
+      .btn { border: 1px solid var(--border); background: #fff; color: var(--text); padding: 10px 16px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+      .btn.primary { background: var(--green); color: #fff; border-color: transparent; }
+      .btn.warn { background: var(--orange); color:#222; border-color: transparent; }
+      .btn:disabled { opacity: .6; cursor: not-allowed; }
+      .pill { border-radius: 999px; padding: 6px 10px; background: #fef3c7; color: #92400e; font-weight: 700; font-size: 12px; }
 
-    el('add').addEventListener('click', ()=>{
-      const n = numbers();
-      const {stockVal,disc,comm,toPay} = calc();
-      const row = {
-        date: el('date').value, sa: el('sa').value,
-        pKg:n.pKg, pPortion:n.pPortion,
-        issuedKg:n.issuedKg, issuedPortion:n.issuedPortion,
-        balKg:n.balKg, balPortion:n.balPortion,
-        cash:n.cash, stockVal, disc, comm, toPay
+      form .row { display:grid; grid-template-columns: repeat(12, 1fr); gap: 12px; margin-bottom: 12px; }
+      label { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing:.02em; }
+      input, select { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: #fff; color: var(--text); font-size: 14px; }
+      input[readonly] { background: #f8fafc; color:#475569; }
+
+      .kpi { display:grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+      .kpi .tile { grid-column: span 12; border:1px dashed var(--border); border-radius: 16px; padding: 14px; background: #fff; }
+      .kpi .value { font-size: 22px; font-weight: 800; }
+      .kpi .caption { color: var(--muted); font-size: 12px; }
+      @media (min-width: 860px){ .kpi .tile.sm-4{ grid-column: span 4; } }
+
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border-bottom: 1px solid var(--border); text-align: left; padding: 8px; font-size: 13px; }
+      thead th { position: sticky; top: 0; background: #fff8ee; z-index: 1; }
+      tbody tr:hover { background: #f9fafb; }
+
+      footer { border-top: 1px solid var(--border); color: var(--muted); padding: 18px 0 40px; font-size: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container nav">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">BA</div>
+          <span>BA payment</span>
+        </div>
+        <nav class="menu" aria-label="Main navigation">
+          <span class="pill">v1</span>
+        </nav>
+      </div>
+    </header>
+
+    <div class="container hero">
+      <p class="eyebrow">Daily agent sales</p>
+      <h1>Record, compute & export</h1>
+      <p style="max-width:760px">Capture sales per agent and let the app auto-compute issued/closing balances in kg, actual sales, discrepancies, commission and total amount to be paid. Export all data to XLSX or CSV.</p>
+      <div class="cta">
+        <a class="btn primary" href="#form">Add record</a>
+        <button class="btn" id="clear-data">Clear all data</button>
+      </div>
+    </div>
+
+    <main class="container">
+      <section class="card" id="form">
+        <h2>New record</h2>
+        <form id="sales-form" autocomplete="off">
+          <div class="row">
+            <div class="col" style="grid-column: span 4">
+              <label for="date">Date</label>
+              <input type="date" id="date" required />
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="channel">Sales channel</label>
+              <select id="channel" required>
+                <option value="Market sales">Market sales</option>
+                <option value="Hawking">Hawking</option>
+              </select>
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="product">Product</label>
+              <select id="product" required>
+                <option value="Kikalayi">Kikalayi</option>
+                <option value="Skewers">Skewers</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col" style="grid-column: span 4">
+              <label for="sa">SA name</label>
+              <input type="text" id="sa" placeholder="Agent name" required />
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="area">Selling area</label>
+              <input type="text" id="area" placeholder="Area / Market" required />
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="unitPrice">Unit price (UGX)</label>
+              <input type="number" id="unitPrice" inputmode="numeric" step="1" min="0" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col" style="grid-column: span 4">
+              <label for="portionWeight">Portion weight (kg)</label>
+              <input type="number" id="portionWeight" step="0.001" min="0" />
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="issuedPortions">Stock issued (portions)</label>
+              <input type="number" id="issuedPortions" step="1" min="0" />
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="issuedKg">Stock issued (kg)</label>
+              <input type="number" id="issuedKg" step="0.001" readonly />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col" style="grid-column: span 4">
+              <label for="closingPortions">Closing balance (portions)</label>
+              <input type="number" id="closingPortions" step="1" min="0" />
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="closingKg">Closing balance (kg)</label>
+              <input type="number" id="closingKg" step="0.001" readonly />
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="cash">Cash collected (UGX)</label>
+              <input type="number" id="cash" step="1" min="0" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col" style="grid-column: span 4">
+              <label for="actualSales">Actual sales (UGX)</label>
+              <input type="number" id="actualSales" step="1" min="0" readonly />
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="flatRate">Flat rate (UGX)</label>
+              <input type="number" id="flatRate" step="1" min="0" />
+            </div>
+            <div class="col" style="grid-column: span 4">
+              <label for="commissionRate">Commission rate (%)</label>
+              <input type="number" id="commissionRate" step="0.1" min="0" max="100" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col" style="grid-column: span 6">
+              <label for="marketFees">Market fees (UGX)</label>
+              <input type="number" id="marketFees" step="1" min="0" />
+            </div>
+            <div class="col" style="grid-column: span 6">
+              <label for="advancedMarketFees">Advanced market fees (UGX)</label>
+              <input type="number" id="advancedMarketFees" step="1" min="0" />
+            </div>
+          </div>
+
+          <div class="kpi" style="margin-top: 6px;">
+            <div class="tile sm-4">
+              <div class="caption">Discrepancies (UGX)</div>
+              <div class="value" id="kpi-discrepancy">0</div>
+            </div>
+            <div class="tile sm-4">
+              <div class="caption">Commission (UGX)</div>
+              <div class="value" id="kpi-commission">0</div>
+            </div>
+            <div class="tile sm-4">
+              <div class="caption">Total amount to be paid (UGX)</div>
+              <div class="value" id="kpi-total">0</div>
+            </div>
+          </div>
+
+          <div class="cta" style="margin-top: 14px;">
+            <button class="btn primary" type="submit">Add record</button>
+            <button class="btn" type="button" id="reset-form">Reset</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" id="records">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+          <h2 style="margin:0">Records</h2>
+          <div class="cta">
+            <button class="btn" id="export-csv">Export CSV</button>
+            <button class="btn warn" id="export-xlsx">Export XLSX</button>
+          </div>
+        </div>
+
+        <div style="overflow:auto; max-height: 55vh; margin-top:10px; border:1px solid var(--border); border-radius: 12px;">
+          <table id="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Channel</th>
+                <th>Product</th>
+                <th>SA name</th>
+                <th>Area</th>
+                <th>Unit price (UGX)</th>
+                <th>Portion weight (kg)</th>
+                <th>Issued (portions)</th>
+                <th>Issued (kg)</th>
+                <th>Closing (portions)</th>
+                <th>Closing (kg)</th>
+                <th>Cash collected (UGX)</th>
+                <th>Actual sales (UGX)</th>
+                <th>Discrepancies (UGX)</th>
+                <th>Commission rate (%)</th>
+                <th>Commission (UGX)</th>
+                <th>Flat rate (UGX)</th>
+                <th>Total to pay (UGX)</th>
+                <th>Market fees (UGX)</th>
+                <th>Advanced market fees (UGX)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <small>
+          © <span id="year"></span> BA payment — Built for GitHub Pages. | <a id="source-link" href="#">Source code</a>
+        </small>
+      </div>
+    </footer>
+
+    <!-- SheetJS for XLSX export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <script>
+      // ===== Helpers =====
+      const UGX = (n) => (isFinite(n) ? Math.round(Number(n)) : 0);
+      const KG3 = (n) => (isFinite(n) ? Number(n).toFixed(3) : (0).toFixed(3));
+      const num = (n) => (n === '' || n === null || n === undefined ? 0 : Number(n));
+
+      // Defaults per product
+      const defaults = {
+        Kikalayi: { price: 500, weight: 0.03 },
+        Skewers: { price: 1000, weight: 0.045 },
       };
-      const rows = load(); rows.push(row); save(rows); render();
-      ['issuedKg','issuedPortion','balKg','balPortion','cash'].forEach(id=> el(id).value='');
-      recalc();
-    });
 
-    el('clear').addEventListener('click', ()=>{ if(confirm('Delete all saved entries on this device?')){ save([]); render(); } });
+      // Elements
+      const el = (id) => document.getElementById(id);
+      const product = el('product');
+      const unitPrice = el('unitPrice');
+      const portionWeight = el('portionWeight');
+      const issuedPortions = el('issuedPortions');
+      const issuedKg = el('issuedKg');
+      const closingPortions = el('closingPortions');
+      const closingKg = el('closingKg');
+      const actualSales = el('actualSales');
+      const cash = el('cash');
+      const flatRate = el('flatRate');
+      const commissionRate = el('commissionRate');
+      const marketFees = el('marketFees');
+      const advancedMarketFees = el('advancedMarketFees');
 
-    // CSV export
-    el('export').addEventListener('click', ()=>{
-      const rows = load();
-      if(!rows.length){alert('No entries to export.');return;}
-      const headers = ['Date','SA','Unit/kg','Unit/portion','Stock value','Issued kg','Issued portion','Balance kg','Balance portion','Cash','Discrepancies','Commission','To pay'];
-      const csv = [headers.join(',')].concat(rows.map(r=>[
-        r.date,r.sa,r.pKg,r.pPortion,r.stockVal,r.issuedKg,r.issuedPortion,r.balKg,r.balPortion,r.cash,r.disc,r.comm,r.toPay
-      ].join(','))).join('\n');
-      const blob = new Blob([csv], {type:'text/csv'});
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='tofu-hawking-entries.csv'; a.click();
-    });
+      const kpiDis = el('kpi-discrepancy');
+      const kpiCom = el('kpi-commission');
+      const kpiTotal = el('kpi-total');
 
-    // XLSX export using SheetJS
-    el('exportXLSX').addEventListener('click', ()=>{
-      const rows = load();
-      if(!rows.length){alert('No entries to export.');return;}
-      const data = [
-        ['Date','SA','Unit/kg','Unit/portion','Stock value','Issued kg','Issued portion','Balance kg','Balance portion','Cash','Discrepancies','Commission','To pay'],
-        ...rows.map(r=>[
-          r.date, r.sa, r.pKg, r.pPortion, r.stockVal, r.issuedKg, r.issuedPortion, r.balKg, r.balPortion, r.cash, r.disc, r.comm, r.toPay
-        ])
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Entries');
-      XLSX.writeFile(wb, 'tofu-hawking-entries.xlsx');
-    });
+      const form = el('sales-form');
+      const tbody = el('tbody');
 
-    // init
-    el('date').valueAsDate = new Date();
-    recalc();
-    render();
-  </script>
-</body>
+      // Footer info
+      el('year').textContent = new Date().getFullYear();
+      el('source-link').href = '#'; // TODO: set to your repo URL
+
+      // Local storage
+      const STORAGE_KEY = 'ba_payment_records_v1';
+      const loadRecords = () => JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const saveRecords = (rows) => localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+
+      // Initialize defaults
+      const applyProductDefaults = () => {
+        const d = defaults[product.value];
+        if (!form.dataset.userEditedPrice) unitPrice.value = d.price;
+        if (!form.dataset.userEditedWeight) portionWeight.value = d.weight;
+        compute();
+      };
+
+      product.addEventListener('change', applyProductDefaults);
+      unitPrice.addEventListener('input', () => (form.dataset.userEditedPrice = '1'));
+      portionWeight.addEventListener('input', () => (form.dataset.userEditedWeight = '1'));
+
+      // Live compute
+      const compute = () => {
+        const w = num(portionWeight.value);
+        const issuedP = num(issuedPortions.value);
+        const closingP = num(closingPortions.value);
+        const price = num(unitPrice.value);
+
+        const issuedK = issuedP * w;
+        const closingK = closingP * w;
+
+        issuedKg.value = KG3(issuedK);
+        closingKg.value = KG3(closingK);
+
+        const actual = (issuedP - closingP) * price;
+        actualSales.value = UGX(actual);
+
+        const discrepancy = UGX(actual) - UGX(num(cash.value));
+        const commission = UGX((num(commissionRate.value) / 100) * UGX(actual));
+        const totalToPay = UGX(commission + num(flatRate.value));
+
+        kpiDis.textContent = UGX(discrepancy).toLocaleString();
+        kpiCom.textContent = UGX(commission).toLocaleString();
+        kpiTotal.textContent = UGX(totalToPay).toLocaleString();
+      };
+
+      ['input','change'].forEach(evt => {
+        [portionWeight, issuedPortions, closingPortions, unitPrice, cash, commissionRate, flatRate].forEach(x => x.addEventListener(evt, compute));
+      });
+
+      // Set initial values
+      (function init(){
+        // Defaults from spec
+        commissionRate.value = 20;
+        flatRate.value = 5000; // default but editable
+        // Today's date
+        el('date').valueAsDate = new Date();
+        applyProductDefaults();
+        compute();
+        renderTable();
+      })();
+
+      // Submit
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        compute();
+        const row = collectFormData();
+        const rows = loadRecords();
+        rows.unshift(row);
+        saveRecords(rows);
+        renderTable();
+        form.reset();
+        // keep defaults after reset
+        form.dataset.userEditedPrice = '';
+        form.dataset.userEditedWeight = '';
+        el('date').valueAsDate = new Date();
+        commissionRate.value = 20;
+        flatRate.value = 5000;
+        applyProductDefaults();
+        compute();
+      });
+
+      // Collect form values + computed
+      function collectFormData(){
+        const date = el('date').value;
+        const channel = el('channel').value;
+        const prod = product.value;
+        const sa = el('sa').value;
+        const area = el('area').value;
+        const price = UGX(num(unitPrice.value));
+        const weight = Number(num(portionWeight.value).toFixed(3));
+        const issuedP = UGX(num(issuedPortions.value));
+        const issuedK = Number((num(issuedPortions.value) * num(portionWeight.value)).toFixed(3));
+        const closingP = UGX(num(closingPortions.value));
+        const closingK = Number((num(closingPortions.value) * num(portionWeight.value)).toFixed(3));
+        const cashCollected = UGX(num(cash.value));
+        const actual = UGX((num(issuedPortions.value) - num(closingPortions.value)) * num(unitPrice.value));
+        const rate = Number(num(commissionRate.value));
+        const commission = UGX((rate/100) * actual);
+        const flat = UGX(num(flatRate.value));
+        const totalToPay = UGX(commission + flat);
+        const discrepancy = UGX(actual - cashCollected);
+        const mFees = UGX(num(marketFees.value));
+        const aFees = UGX(num(advancedMarketFees.value));
+
+        return { date, channel, prod, sa, area, price, weight, issuedP, issuedK, closingP, closingK, cashCollected, actual, discrepancy, rate, commission, flat, totalToPay, marketFees: mFees, advancedMarketFees: aFees };
+      }
+
+      // Render table
+      function renderTable(){
+        const rows = loadRecords();
+        tbody.innerHTML = '';
+        rows.forEach((r, idx) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.date}</td>
+            <td>${r.channel}</td>
+            <td>${r.prod}</td>
+            <td>${r.sa}</td>
+            <td>${r.area}</td>
+            <td>${r.price.toLocaleString()}</td>
+            <td>${r.weight.toFixed(3)}</td>
+            <td>${r.issuedP}</td>
+            <td>${r.issuedK.toFixed(3)}</td>
+            <td>${r.closingP}</td>
+            <td>${r.closingK.toFixed(3)}</td>
+            <td>${r.cashCollected.toLocaleString()}</td>
+            <td>${r.actual.toLocaleString()}</td>
+            <td>${r.discrepancy.toLocaleString()}</td>
+            <td>${r.rate}</td>
+            <td>${r.commission.toLocaleString()}</td>
+            <td>${r.flat.toLocaleString()}</td>
+            <td>${r.totalToPay.toLocaleString()}</td>
+            <td>${r.marketFees.toLocaleString()}</td>
+            <td>${r.advancedMarketFees.toLocaleString()}</td>
+            <td><button class="btn" data-del="${idx}">Delete</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Delete row
+      tbody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-del]');
+        if(!btn) return;
+        const idx = Number(btn.dataset.del);
+        const rows = loadRecords();
+        rows.splice(idx, 1);
+        saveRecords(rows);
+        renderTable();
+      });
+
+      // Reset form
+      el('reset-form').addEventListener('click', () => {
+        form.reset();
+        form.dataset.userEditedPrice = '';
+        form.dataset.userEditedWeight = '';
+        el('date').valueAsDate = new Date();
+        commissionRate.value = 20; flatRate.value = 5000; applyProductDefaults(); compute();
+      });
+
+      // Clear all data
+      el('clear-data').addEventListener('click', () => {
+        if(confirm('Clear ALL saved records?')){ localStorage.removeItem(STORAGE_KEY); renderTable(); }
+      });
+
+      // Recompute on misc inputs
+      [cash, marketFees, advancedMarketFees].forEach(x => x.addEventListener('input', compute));
+
+      // Export CSV
+      el('export-csv').addEventListener('click', () => {
+        const rows = loadRecords();
+        if(rows.length === 0) return alert('No data to export');
+        const headers = Object.keys(rows[0]);
+        const csv = [headers.join(',')].concat(rows.map(r => headers.map(h => r[h]).join(','))).join('
+');
+        const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'ba_payment.csv'; a.click(); URL.revokeObjectURL(url);
+      });
+
+      // Export XLSX via SheetJS
+      el('export-xlsx').addEventListener('click', () => {
+        const rows = loadRecords();
+        if(rows.length === 0) return alert('No data to export');
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'BA payment');
+        XLSX.writeFile(wb, 'ba_payment.xlsx');
+      });
+    </script>
+  </body>
 </html>
