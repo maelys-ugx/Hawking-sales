@@ -105,6 +105,7 @@
             <div class="span-6">
               <label for="channel">Sales channel</label>
               <select id="channel" required>
+                <option value="">—</option>
                 <option value="Market sales">Market sales</option>
                 <option value="Hawking">Hawking</option>
               </select>
@@ -114,6 +115,7 @@
             <div class="span-6">
               <label for="product">Product</label>
               <select id="product" required>
+                <option value="">—</option>
                 <option value="Kikalayi">Kikalayi</option>
                 <option value="Skewers">Skewers</option>
               </select>
@@ -316,7 +318,7 @@
       const loadRecords = () => JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
       const saveRecords = (rows) => localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
 
-      // --- Robust defaults mapping (tolère espaces/casse/typos légers) ---
+      // --- Defaults mapping ---
       const getDefaultsFor = (name) => {
         const key = String(name || '').toLowerCase().trim();
         if (key.startsWith('kikal')) return defaults.Kikalayi;
@@ -359,14 +361,41 @@
         kpiTotal.textContent = UGX(totalToPay).toLocaleString();
       };
 
+      // --- Fees-only mode ---
+      function isFeesOnlyMode(){
+        return num(marketFees.value) > 0 || num(advancedMarketFees.value) > 0;
+      }
+
+      // Bascule dynamiquement les champs required
+      function updateRequired(){
+        const feesOnly = isFeesOnlyMode();
+
+        // Date est TOUJOURS requise
+        el('date').required = true;
+
+        // Tous les autres champs deviennent non requis en fees-only
+        const maybeRequired = ['sa','area','channel','product'];
+        maybeRequired.forEach(id => {
+          const node = el(id);
+          if (!node) return;
+          node.required = !feesOnly;
+        });
+      }
+
       // Écouteurs: tout ce qui peut impacter le calcul
       ['input','change'].forEach(evt => {
         [product, portionWeight, issuedPortions, closingPortions, unitPrice, cash, commissionRate, flatRate]
           .forEach(x => x.addEventListener(evt, compute));
       });
 
-      // Appliquer les defaults à chaque changement/édition du produit
+      // Defaults à chaque changement/édition du produit
       ['change','input'].forEach(evt => product.addEventListener(evt, applyProductDefaults));
+
+      // Suivi fees → update required
+      [marketFees, advancedMarketFees].forEach(x => {
+        x.addEventListener('input', updateRequired);
+        x.addEventListener('change', updateRequired);
+      });
 
       // Set initial values (sécurisé)
       function setToday() {
@@ -379,15 +408,28 @@
         commissionRate.value = 20;
         flatRate.value = 5000;
         setToday();
-        applyProductDefaults(); // définit aussi unitPrice / portionWeight
+        applyProductDefaults();
         compute();
         renderTable();
+        updateRequired(); // initialise les contraintes
       })();
 
       // Basic required fields check
       function ensureRequired(){
-        const fields = ['date','sa','area'];
-        for(const id of fields){ if(!el(id).value) { alert('Please fill: ' + id); return false; } }
+        // Date est toujours requise
+        if (!el('date').value) { alert('Please fill: date'); return false; }
+
+        // En fees-only, on ne vérifie rien d'autre
+        if (isFeesOnlyMode()) return true;
+
+        // Sinon, règle d'origine
+        const fields = ['sa','area'];
+        for(const id of fields){
+          if(!el(id).value){
+            alert('Please fill: ' + id);
+            return false;
+          }
+        }
         return true;
       }
 
@@ -403,10 +445,9 @@
         renderTable();
         form.reset();
         setToday();
-        commissionRate.value = 20;
-        flatRate.value = 5000;
-        applyProductDefaults();
-        compute();
+        commissionRate.value = 20; flatRate.value = 5000;
+        applyProductDefaults(); compute();
+        updateRequired();
       });
 
       // Collect form values + computed
@@ -448,10 +489,10 @@
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td>${r.date}</td>
-            <td>${r.channel}</td>
-            <td>${r.prod}</td>
-            <td>${r.sa}</td>
-            <td>${r.area}</td>
+            <td>${r.channel||''}</td>
+            <td>${r.prod||''}</td>
+            <td>${r.sa||''}</td>
+            <td>${r.area||''}</td>
             <td>${(r.price||0).toLocaleString()}</td>
             <td>${(r.weight||0).toFixed(3)}</td>
             <td>${r.issuedP||0}</td>
@@ -492,9 +533,10 @@
         flatRate.value = 5000;
         applyProductDefaults();
         compute();
+        updateRequired();
       });
 
-      // Recompute when these change (utile si tu saisis des frais d’abord)
+      // Recompute when these change
       [cash, marketFees, advancedMarketFees].forEach(x => x.addEventListener('input', compute));
 
       // Export XLSX only
