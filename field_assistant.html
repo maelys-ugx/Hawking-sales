@@ -75,7 +75,7 @@
           <span>BA payment</span>
         </div>
         <nav class="menu" aria-label="Main navigation">
-          <span class="pill">v1.3</span>
+          <span class="pill">v1.2</span>
         </nav>
       </div>
     </header>
@@ -273,15 +273,18 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <script>
+      // ===== Helpers =====
       const UGX = (n) => (isFinite(n) ? Math.round(Number(n)) : 0);
       const KG3 = (n) => (isFinite(n) ? Number(n).toFixed(3) : (0).toFixed(3));
       const num = (n) => (n === '' || n === null || n === undefined ? 0 : Number(n));
 
+      // Defaults per product
       const defaults = {
         Kikalayi: { price: 500, weight: 0.03 },
         Skewers: { price: 1000, weight: 0.045 },
       };
 
+      // Elements
       const el = (id) => document.getElementById(id);
       const product = el('product');
       const unitPrice = el('unitPrice');
@@ -304,4 +307,176 @@
       const form = el('sales-form');
       const tbody = el('tbody');
 
-      el('year').textContent = new Date().get
+      // Footer info
+      el('year').textContent = new Date().getFullYear();
+      el('source-link').href = '#';
+
+      // Local storage
+      const STORAGE_KEY = 'ba_payment_records_v1_2';
+      const loadRecords = () => JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const saveRecords = (rows) => localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+
+      // Initialize defaults
+      const applyProductDefaults = () => {
+        const d = defaults[product.value];
+        // Always reset to product defaults on change (still editable later)
+        unitPrice.value = d.price;
+        portionWeight.value = d.weight;
+        compute();
+      };
+
+      product.addEventListener('change', applyProductDefaults);
+
+      // Live compute
+      const compute = () => {
+        const w = num(portionWeight.value);
+        const issuedP = num(issuedPortions.value);
+        const closingP = num(closingPortions.value);
+        const price = num(unitPrice.value);
+
+        const issuedK = issuedP * w;
+        const closingK = closingP * w;
+
+        issuedKg.value = KG3(issuedK);
+        closingKg.value = KG3(closingK);
+
+        const actual = (issuedP - closingP) * price;
+        actualSales.value = UGX(actual);
+
+        const discrepancy = UGX(actual) - UGX(num(cash.value));
+        const commission = UGX((num(commissionRate.value) / 100) * UGX(actual));
+        const totalToPay = UGX(commission + num(flatRate.value));
+
+        kpiDis.textContent = UGX(discrepancy).toLocaleString();
+        kpiCom.textContent = UGX(commission).toLocaleString();
+        kpiTotal.textContent = UGX(totalToPay).toLocaleString();
+      };
+
+      ['input','change'].forEach(evt => {
+        [portionWeight, issuedPortions, closingPortions, unitPrice, cash, commissionRate, flatRate].forEach(x => x.addEventListener(evt, compute));
+      });
+
+      // Set initial values
+      (function init(){
+        commissionRate.value = 20;
+        flatRate.value = 5000;
+        el('date').valueAsDate = new Date();
+        applyProductDefaults();
+        compute();
+        renderTable();
+      })();
+
+      // Basic required fields check
+      function ensureRequired(){
+        const fields = ['date','sa','area'];
+        for(const id of fields){ if(!el(id).value) { alert('Please fill: ' + id); return false; } }
+        return true;
+      }
+
+      // Submit
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if(!ensureRequired()) return;
+        compute();
+        const row = collectFormData();
+        const rows = loadRecords();
+        rows.unshift(row);
+        saveRecords(rows);
+        renderTable();
+        form.reset();
+        el('date').valueAsDate = new Date();
+        commissionRate.value = 20; flatRate.value = 5000; applyProductDefaults(); compute();
+      });
+
+      // Collect form values + computed
+      function collectFormData(){
+        const date = el('date').value;
+        const channel = el('channel').value;
+        const prod = product.value;
+        const sa = el('sa').value;
+        const area = el('area').value;
+        const price = UGX(num(unitPrice.value));
+        const weight = Number(num(portionWeight.value).toFixed(3));
+        const issuedP = UGX(num(issuedPortions.value));
+        const issuedK = Number((num(issuedPortions.value) * num(portionWeight.value)).toFixed(3));
+        const closingP = UGX(num(closingPortions.value));
+        const closingK = Number((num(closingPortions.value) * num(portionWeight.value)).toFixed(3));
+        const cashCollected = UGX(num(cash.value));
+        const actual = UGX((num(issuedPortions.value) - num(closingPortions.value)) * num(unitPrice.value));
+        const rate = Number(num(commissionRate.value));
+        const commission = UGX((rate/100) * actual);
+        const flat = UGX(num(flatRate.value));
+        const totalToPay = UGX(commission + flat);
+        const discrepancy = UGX(actual - cashCollected);
+        const mFees = UGX(num(marketFees.value));
+        const aFees = UGX(num(advancedMarketFees.value));
+
+        return { date, channel, prod, sa, area, price, weight, issuedP, issuedK, closingP, closingK, cashCollected, actual, discrepancy, rate, commission, flat, totalToPay, marketFees: mFees, advancedMarketFees: aFees };
+      }
+
+      // Render table
+      function renderTable(){
+        const rows = loadRecords();
+        tbody.innerHTML = '';
+        rows.forEach((r, idx) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.date}</td>
+            <td>${r.channel}</td>
+            <td>${r.prod}</td>
+            <td>${r.sa}</td>
+            <td>${r.area}</td>
+            <td>${(r.price||0).toLocaleString()}</td>
+            <td>${(r.weight||0).toFixed(3)}</td>
+            <td>${r.issuedP||0}</td>
+            <td>${(r.issuedK||0).toFixed(3)}</td>
+            <td>${r.closingP||0}</td>
+            <td>${(r.closingK||0).toFixed(3)}</td>
+            <td>${(r.cashCollected||0).toLocaleString()}</td>
+            <td>${(r.actual||0).toLocaleString()}</td>
+            <td>${(r.discrepancy||0).toLocaleString()}</td>
+            <td>${r.rate||0}</td>
+            <td>${(r.commission||0).toLocaleString()}</td>
+            <td>${(r.flat||0).toLocaleString()}</td>
+            <td>${(r.totalToPay||0).toLocaleString()}</td>
+            <td>${(r.marketFees||0).toLocaleString()}</td>
+            <td>${(r.advancedMarketFees||0).toLocaleString()}</td>
+            <td><button class="btn" data-del="${idx}">Delete</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Delete row
+      tbody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-del]');
+        if(!btn) return;
+        const idx = Number(btn.dataset.del);
+        const rows = loadRecords();
+        rows.splice(idx, 1);
+        saveRecords(rows);
+        renderTable();
+      });
+
+      // Reset form
+      el('reset-form').addEventListener('click', () => {
+        form.reset();
+        el('date').valueAsDate = new Date();
+        commissionRate.value = 20; flatRate.value = 5000; applyProductDefaults(); compute();
+      });
+
+      // Recompute when these change
+      [cash, marketFees, advancedMarketFees].forEach(x => x.addEventListener('input', compute));
+
+      // Export XLSX only
+      document.getElementById('export-xlsx').addEventListener('click', () => {
+        const rows = loadRecords();
+        if(rows.length === 0) return alert('No data to export');
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'BA payment');
+        XLSX.writeFile(wb, 'ba_payment.xlsx');
+      });
+    </script>
+  </body>
+</html>
