@@ -406,7 +406,7 @@
         const rate = Number(num(commissionRate.value));
         const commission = UGX((rate/100) * actual);
         const flat = UGX(num(flatRate.value));
-        const totalToPay = UGX(commission + flat);
+        const totalToPay = UGX(flat - commission);
         const discrepancy = UGX(actual - cashCollected);
         const mFees = UGX(num(marketFees.value));
         const aFees = UGX(num(advancedMarketFees.value));
