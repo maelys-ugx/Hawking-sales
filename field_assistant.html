@@ -345,7 +345,7 @@
 
         const discrepancy = UGX(actual) - UGX(num(cash.value));
         const commission = UGX((num(commissionRate.value) / 100) * UGX(actual));
-        const totalToPay = UGX(commission + num(flatRate.value));
+        const totalToPay = UGX(commission - discrepancy);
 
         kpiDis.textContent = UGX(discrepancy).toLocaleString();
         kpiCom.textContent = UGX(commission).toLocaleString();
