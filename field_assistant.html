@@ -11,4 +11,212 @@
     :root { --primary:#0b5fff; --bg:#f7f8fb; --text:#222; --muted:#6b7280; }
     * { box-sizing: border-box; }
     body { margin: 24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
-    header { margin-bottom: 16px;
+    header { margin-bottom: 16px; }
+    h1 { margin: 0 0 8px; font-size: 28px; color: var(--primary); }
+    .sub { color: var(--muted); margin: 0 0 16px; }
+    .card { background: #fff; border-radius: 14px; box-shadow: 0 4px 18px rgba(0,0,0,.06); padding: 16px; margin-bottom: 16px; }
+    .row { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 12px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    input, textarea, select { width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 14px; background: #fff; }
+    textarea { height: 40px; resize: vertical; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
+    button { padding: 10px 14px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 600; }
+    .primary { background: var(--primary); color: #fff; }
+    .ghost { background: #eef2ff; color: #1e40af; }
+    .danger { background:#fee2e2; color:#991b1b; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px; border-bottom: 1px solid #eef; text-align: left; }
+    th { background:#f3f4f6; font-weight:700; }
+    tfoot td { font-weight: 700; }
+    .muted { color: var(--muted); }
+    .right { text-align: right; }
+    .wrap { word-break: break-word; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Hawking Field Assistant</h1>
+    <p class="sub">Enregistre tes ventes quotidiennes. Fonctionne même hors-ligne ✅</p>
+  </header>
+
+  <!-- Formulaire d’ajout -->
+  <section class="card">
+    <div class="row">
+      <div>
+        <label for="date">Date</label>
+        <input id="date" type="date">
+      </div>
+      <div>
+        <label for="agent">Agent</label>
+        <input id="agent" type="text" placeholder="Nom (optionnel)">
+      </div>
+      <div>
+        <label for="opening">Stock ouverture</label>
+        <input id="opening" type="number" inputmode="numeric" placeholder="ex: 120">
+      </div>
+      <div>
+        <label for="sold">Vendu</label>
+        <input id="sold" type="number" inputmode="numeric" placeholder="ex: 45">
+      </div>
+      <div>
+        <label for="cash">Cash (FCFA / €)</label>
+        <input id="cash" type="number" inputmode="decimal" placeholder="ex: 35000">
+      </div>
+      <div>
+        <label for="expense">Dépenses</label>
+        <input id="expense" type="number" inputmode="decimal" placeholder="ex: 2000">
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px; grid-template-columns: 1fr;">
+      <div>
+        <label for="notes">Notes</label>
+        <textarea id="notes" placeholder="Commentaires, incidents, etc."></textarea>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="addBtn">Ajouter l’entrée</button>
+      <button class="ghost" id="exportBtn">Exporter CSV</button>
+      <button class="danger" id="clearBtn">Tout effacer</button>
+    </div>
+    <p class="muted" style="margin-top:8px;">Astuce : l’appli garde tes données en local (offline). Tu peux exporter un CSV pour sauvegarder/partager.</p>
+  </section>
+
+  <!-- Tableau des entrées -->
+  <section class="card">
+    <table id="table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Agent</th>
+          <th class="right">Stock</th>
+          <th class="right">Vendu</th>
+          <th class="right">Cash</th>
+          <th class="right">Dépenses</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3" class="right">Totaux</td>
+          <td class="right" id="totSold">0</td>
+          <td class="right" id="totCash">0</td>
+          <td class="right" id="totExp">0</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </section>
+
+  <footer class="muted">© 2025 Hawking Sales</footer>
+
+  <script>
+    // Enregistrement du Service Worker pour le mode hors-ligne
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/Hawking-sales/sw.js', { scope: '/Hawking-sales/' })
+        .catch(console.error);
+    }
+
+    // ------- Données locales (offline) -------
+    const KEY = 'hawking_entries_v1';
+    const $ = (id) => document.getElementById(id);
+    const inputs = ['date','agent','opening','sold','cash','expense','notes'].reduce((a,k)=> (a[k]=$ (k), a), {});
+    const tbody = $('tbody');
+    const totSold = $('totSold'), totCash = $('totCash'), totExp = $('totExp');
+
+    const read = () => JSON.parse(localStorage.getItem(KEY) || '[]');
+    const write = (data) => localStorage.setItem(KEY, JSON.stringify(data));
+
+    function render() {
+      const rows = read();
+      tbody.innerHTML = '';
+      let s=0, c=0, e=0;
+
+      rows.forEach((r, idx) => {
+        s += Number(r.sold||0);
+        c += Number(r.cash||0);
+        e += Number(r.expense||0);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.date||''}</td>
+          <td>${(r.agent||'')}</td>
+          <td class="right">${num(r.opening)}</td>
+          <td class="right">${num(r.sold)}</td>
+          <td class="right">${money(r.cash)}</td>
+          <td class="right">${money(r.expense)}</td>
+          <td class="wrap">${escapeHtml(r.notes||'')}</td>
+          <td class="right"><button data-i="${idx}" class="danger" style="padding:6px 10px;">Suppr.</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      totSold.textContent = s;
+      totCash.textContent = money(c, false);
+      totExp.textContent = money(e, false);
+    }
+
+    function num(v){ v = Number(v||0); return isFinite(v)? v : 0; }
+    function money(v, withSym=true){ v = Number(v||0); const t = isFinite(v)? v.toLocaleString() : '0'; return withSym? (t) : t; }
+    function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+
+    // Ajout d’une entrée
+    $('addBtn').addEventListener('click', () => {
+      const entry = {
+        date: inputs.date.value || new Date().toISOString().slice(0,10),
+        agent: inputs.agent.value.trim(),
+        opening: num(inputs.opening.value),
+        sold: num(inputs.sold.value),
+        cash: num(inputs.cash.value),
+        expense: num(inputs.expense.value),
+        notes: inputs.notes.value.trim()
+      };
+      const rows = read();
+      rows.push(entry);
+      write(rows);
+      render();
+      // reset léger
+      inputs.sold.value = ''; inputs.cash.value=''; inputs.expense.value=''; inputs.notes.value='';
+    });
+
+    // Suppression d’une ligne
+    tbody.addEventListener('click', (e) => {
+      if (e.target.matches('button[data-i]')) {
+        const i = Number(e.target.getAttribute('data-i'));
+        const rows = read();
+        rows.splice(i,1);
+        write(rows);
+        render();
+      }
+    });
+
+    // Export CSV
+    $('exportBtn').addEventListener('click', () => {
+      const rows = read();
+      const header = ['date','agent','opening','sold','cash','expense','notes'];
+      const csv = [header.join(',')].concat(
+        rows.map(r => header.map(h => `"${String(r[h]??'').replace(/"/g,'""')}"`).join(','))
+      ).join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `hawking_sales_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // Tout effacer
+    $('clearBtn').addEventListener('click', () => {
+      if (confirm('Supprimer toutes les entrées locales ?')) {
+        localStorage.removeItem(KEY);
+        render();
+      }
+    });
+
+    // Valeurs par défaut
+    inputs.date.value = new Date().toISOString().slice(0,10);
+    render();
+  </script>
+</body>
+</html>
