@@ -3,75 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Couleur de thème et manifest PWA -->
-  <meta name="theme-color" content="#ffffff" />
+  <meta name="theme-color" content="#0b5fff" />
   <link rel="manifest" href="/Hawking-sales/manifest.webmanifest">
+  <title>Hawking Field Assistant</title>
 
-  <title>Field Assistant</title>
-
-  <!-- Exemple : ton CSS et ton JS -->
-  <link rel="stylesheet" href="/Hawking-sales/styles.css">
-  <script src="/Hawking-sales/app.js" defer></script>
-</head>
-<body>
-
-  <header>
-    <h1>Hawking Field Assistant</h1>
-  </header>
-
-  <main>
-    <p>Bienvenue dans ton application hors-ligne 🚀</p>
-    <p>Tu peux naviguer même sans connexion Internet une fois la page chargée !</p>
-
-    <!-- Exemple de petit formulaire -->
-    <form id="noteForm">
-      <label for="note">Note :</label>
-      <input type="text" id="note" name="note" placeholder="Écris une note..." />
-      <button type="submit">Enregistrer</button>
-    </form>
-
-    <ul id="notesList"></ul>
-  </main>
-
-  <footer>
-    <p>© 2025 Hawking Sales</p>
-  </footer>
-
-  <!-- Script d’enregistrement du service worker -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/Hawking-sales/sw.js', { scope: '/Hawking-sales/' })
-        .then(() => console.log("Service Worker enregistré ✅"))
-        .catch(err => console.error("Erreur SW :", err));
-    }
-
-    // Exemple : stockage local simple pour démonstration offline
-    const form = document.getElementById('noteForm');
-    const list = document.getElementById('notesList');
-    const notes = JSON.parse(localStorage.getItem('notes') || '[]');
-
-    function renderNotes() {
-      list.innerHTML = '';
-      notes.forEach((n, i) => {
-        const li = document.createElement('li');
-        li.textContent = n;
-        list.appendChild(li);
-      });
-    }
-
-    renderNotes();
-
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      const val = form.note.value.trim();
-      if (val) {
-        notes.push(val);
-        localStorage.setItem('notes', JSON.stringify(notes));
-        form.reset();
-        renderNotes();
-      }
-    });
-  </script>
-</body>
-</html>
+  <style>
+    :root { --primary:#0b5fff; --bg:#f7f8fb; --text:#222; --muted:#6b7280; }
+    * { box-sizing: border-box; }
+    body { margin: 24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    header { margin-bottom: 16px;
