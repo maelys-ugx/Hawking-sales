@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -343,12 +343,14 @@
         const actual = (issuedP - closingP) * price;
         actualSales.value = UGX(actual);
 
-        const discrepancy = UGX(actual) - UGX(num(cash.value));
-        const commission = UGX((num(commissionRate.value) / 100) * UGX(actual));
-        const totalToPay = UGX(commission - discrepancy);
+        // --- unified formula ---
+        const discrepancy = UGX(actual) - UGX(num(cash.value));            // actual - cash
+        const commission  = UGX((num(commissionRate.value) / 100) * UGX(actual));
+        const flat        = UGX(num(flatRate.value));
+        const totalToPay  = UGX(flat + commission - discrepancy);           // flat + commission - discrepancy
 
-        kpiDis.textContent = UGX(discrepancy).toLocaleString();
-        kpiCom.textContent = UGX(commission).toLocaleString();
+        kpiDis.textContent   = UGX(discrepancy).toLocaleString();
+        kpiCom.textContent   = UGX(commission).toLocaleString();
         kpiTotal.textContent = UGX(totalToPay).toLocaleString();
       };
 
@@ -406,12 +408,19 @@
         const rate = Number(num(commissionRate.value));
         const commission = UGX((rate/100) * actual);
         const flat = UGX(num(flatRate.value));
-        const totalToPay = UGX(commission + flat);
-        const discrepancy = UGX(actual - cashCollected);
+
+        const discrepancy = UGX(actual - cashCollected);              // actual - cash
+        const totalToPay  = UGX(flat + commission - discrepancy);     // unified formula
+
         const mFees = UGX(num(marketFees.value));
         const aFees = UGX(num(advancedMarketFees.value));
 
-        return { date, channel, prod, sa, area, price, weight, issuedP, issuedK, closingP, closingK, cashCollected, actual, discrepancy, rate, commission, flat, totalToPay, marketFees: mFees, advancedMarketFees: aFees };
+        return {
+          date, channel, prod, sa, area,
+          price, weight, issuedP, issuedK, closingP, closingK,
+          cashCollected, actual, discrepancy, rate, commission, flat, totalToPay,
+          marketFees: mFees, advancedMarketFees: aFees
+        };
       }
 
       // Render table
@@ -453,31 +462,3 @@
         if(!btn) return;
         const idx = Number(btn.dataset.del);
         const rows = loadRecords();
-        rows.splice(idx, 1);
-        saveRecords(rows);
-        renderTable();
-      });
-
-      // Reset form
-      el('reset-form').addEventListener('click', () => {
-        form.reset();
-        el('date').valueAsDate = new Date();
-        commissionRate.value = 20; flatRate.value = 5000; applyProductDefaults(); compute();
-      });
-
-      // Recompute when these change
-      [cash, marketFees, advancedMarketFees].forEach(x => x.addEventListener('input', compute));
-
-      // Export XLSX only
-      document.getElementById('export-xlsx').addEventListener('click', () => {
-        const rows = loadRecords();
-        if(rows.length === 0) return alert('No data to export');
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'BA payment');
-        XLSX.writeFile(wb, 'ba_payment.xlsx');
-      });
-    </script>
-  </body>
-</html>
-
