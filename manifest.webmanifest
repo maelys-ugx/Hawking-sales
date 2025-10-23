@@ -1,0 +1,9 @@
+{
+  "name": "Hawking Field Assistant",
+  "short_name": "FieldAssist",
+  "start_url": "/Hawking-sales/field_assistant.html",
+  "scope": "/Hawking-sales/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff"
+}
