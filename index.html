@@ -43,7 +43,7 @@
       .eyebrow { color: var(--muted); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 12px; }
       .cta { margin-top: 14px; display:flex; gap:10px; flex-wrap: wrap; }
 
-      .btn { border: 1px solid var(--border); background: #fff; color: var(--text); padding: 10px 16px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+      .btn { border: 1px solid var(--border); background: #fff; color: #000; padding: 10px 16px; border-radius: 12px; font-weight: 700; cursor: pointer; }
       .btn.primary { background: var(--green); color: #fff; border-color: transparent; }
       .btn.warn { background: var(--orange); color:#222; border-color: transparent; }
       .pill { border-radius: 999px; padding: 6px 10px; background: #fef3c7; color: #92400e; font-weight: 700; font-size: 12px; }
@@ -86,7 +86,7 @@
       <p style="max-width:760px">BA payment is a lightweight, single-page web app (HTML/CSS/JS, in English) designed to record and automatically calculate daily sales data for selling agents. It stores records locally in the browser, with options to export data to .xlsx.</p>
       <div class="cta">
         <a class="btn primary" href="#form">Record data</a>
-        <!-- (Clear all data button moved into the form actions below) -->
+        <!-- Clear all data button is placed in the form actions -->
       </div>
     </div>
 
@@ -323,7 +323,7 @@
       const getDefaultsFor = (name) => {
         const key = String(name || '').toLowerCase().trim();
         if (key.startsWith('kikal')) return defaults.Kikalayi;
-        if (key.startsWith('skewer')) return defaults.Skewers;
+        if (key.startswith('skewer')) return defaults.Skewers;
         return null;
       };
 
@@ -341,28 +341,27 @@
         compute();
       };
 
-      // Règle canal → Flat wedge & commission par défaut
+      // Règle canal → flat & commission par défaut (commission vide si canal vide)
       function applyChannelDefaults(){
         const ch = el('channel').value;
+
         if (ch === 'Market sales') {
           flatRate.value = 5000;
-          // pas de changement auto sur commissionRate ici
+          commissionRate.value = 20;   // 20%
         } else if (ch === 'Hawking') {
           flatRate.value = 0;
+          commissionRate.value = 20;   // 20%
         } else if (ch === '') {
-          // Canal non sélectionné → flat = 0, commission = 0
           flatRate.value = 0;
-          commissionRate.value = 0;
+          commissionRate.value = '';   // affichage vide (calculé comme 0)
         }
         compute();
       }
 
-      // Anti scroll change on number inputs
+      // Anti scroll sur inputs number
       document.addEventListener('wheel', (e) => {
         const t = e.target;
-        if (t && t.tagName === 'INPUT' && t.type === 'number') {
-          t.blur();
-        }
+        if (t && t.tagName === 'INPUT' && t.type === 'number') t.blur();
       }, { passive: true });
 
       // Fees-only mode
@@ -373,17 +372,13 @@
       // Champs required (General + Product + Financial) sauf si fees-only
       function updateRequired(){
         const feesOnly = isFeesOnlyMode();
-
-        // Date toujours requise
         el('date').required = true;
 
-        // Champs obligatoires (hors readonly)
         const requiredIds = [
           'channel','product','sa','area',
           'unitPrice','portionWeight','issuedPortions','closingPortions',
           'cash','commissionRate','flatRate'
         ];
-
         requiredIds.forEach(id => {
           const node = el(id);
           if (!node) return;
@@ -394,7 +389,6 @@
       // Vérification stricte au submit
       function ensureRequired(){
         if (!el('date').value) { alert('Please fill: Date'); return false; }
-
         if (isFeesOnlyMode()) return true;
 
         const fields = [
@@ -421,10 +415,10 @@
         return true;
       }
 
-      // Alert spam guard
+      // Alerte si cash > ventes (discrepancy négative)
       let warnedCashOver = false;
 
-      // Live compute (inclut la règle: channel vide => commission=0 & flat=0)
+      // Live compute (commission vide traitée comme 0 si canal vide)
       const compute = () => {
         const w = num(portionWeight.value);
         const issuedP = num(issuedPortions.value);
@@ -446,13 +440,12 @@
 
         const discrepancy = UGX(actual) - UGX(num(cash.value));            // actual - cash
         const commission  = UGX((effectiveRate / 100) * UGX(actual));
-        const totalToPay  = UGX(flatVal + commission - discrepancy);       // flat + commission - discrepancy
+        const totalToPay  = UGX(flatVal + commission - discrepancy);
 
         kpiDis.textContent   = UGX(discrepancy).toLocaleString();
         kpiCom.textContent   = UGX(commission).toLocaleString();
         kpiTotal.textContent = UGX(totalToPay).toLocaleString();
 
-        // Alerte si cash > ventes (discrepancy négative)
         if (discrepancy < 0) {
           if (!warnedCashOver) {
             alert(`Warning: Cash collected exceeds computed sales by ${Math.abs(discrepancy).toLocaleString()} UGX. Please review price, issued/closing quantities, and cash entry.`);
@@ -463,7 +456,7 @@
         }
       };
 
-      // Set initial values (sécurisé)
+      // Set initial values
       function setToday() {
         const d = el('date');
         try { d.valueAsDate = new Date(); }
@@ -471,29 +464,23 @@
       }
 
       (function init(){
-        commissionRate.value = 20;
-        flatRate.value = 5000;   // valeur par défaut avant choix du canal
+        commissionRate.value = '';  // vide tant que le canal n'est pas choisi
+        flatRate.value = 5000;      // valeur par défaut visuelle; sera corrigée par applyChannelDefaults()
         setToday();
-        applyChannelDefaults();  // applique aussi règle canal vide => 0 / 0
-        applyProductDefaults();  // met 0 si pas de produit sélectionné
+        applyChannelDefaults();     // applique 20% si canal déjà choisi, sinon vide + flat=0
+        applyProductDefaults();     // met 0 si pas de produit sélectionné
         compute();
         renderTable();
-        updateRequired(); // initialise les contraintes
+        updateRequired();
       })();
 
-      // Écouteurs: tout ce qui peut impacter le calcul
+      // Écouteurs
       ['input','change'].forEach(evt => {
         [product, portionWeight, issuedPortions, closingPortions, unitPrice, cash, commissionRate, flatRate]
           .forEach(x => x.addEventListener(evt, compute));
       });
-
-      // Defaults à chaque changement/édition du produit
       ['change','input'].forEach(evt => product.addEventListener(evt, applyProductDefaults));
-
-      // Règles canal
       ['change','input'].forEach(evt => el('channel').addEventListener(evt, applyChannelDefaults));
-
-      // Suivi fees → update required
       [marketFees, advancedMarketFees].forEach(x => {
         x.addEventListener('input', updateRequired);
         x.addEventListener('change', updateRequired);
@@ -515,13 +502,12 @@
         const cashCollected = UGX(num(cash.value));
         const actual = UGX((num(issuedPortions.value) - num(closingPortions.value)) * num(unitPrice.value));
 
-        // Applique la règle channel vide
         const effectiveRate = (channel === '' ? 0 : Number(num(commissionRate.value)));
         const commission = UGX((effectiveRate/100) * actual);
         const flat = (channel === '' ? 0 : UGX(num(flatRate.value)));
 
-        const discrepancy = UGX(actual - cashCollected);              // actual - cash
-        const totalToPay  = UGX(flat + commission - discrepancy);     // unified formula
+        const discrepancy = UGX(actual - cashCollected);
+        const totalToPay  = UGX(flat + commission - discrepancy);
         const mFees = UGX(num(marketFees.value));
         const aFees = UGX(num(advancedMarketFees.value));
 
@@ -589,17 +575,7 @@
         renderTable();
         form.reset();
         setToday();
-        commissionRate.value = 20; flatRate.value = 5000;
-        applyChannelDefaults();
-        applyProductDefaults(); compute();
-        updateRequired();
-      });
-
-      // Reset form
-      el('reset-form').addEventListener('click', () => {
-        form.reset();
-        setToday();
-        commissionRate.value = 20;
+        commissionRate.value = '';  // reste vide après enregistrement
         flatRate.value = 5000;
         applyChannelDefaults();
         applyProductDefaults();
@@ -607,7 +583,19 @@
         updateRequired();
       });
 
-      // Clear all data (désormais à côté de Record/Reset)
+      // Reset form
+      el('reset-form').addEventListener('click', () => {
+        form.reset();
+        setToday();
+        commissionRate.value = '';  // vide tant que canal non choisi
+        flatRate.value = 5000;
+        applyChannelDefaults();
+        applyProductDefaults();
+        compute();
+        updateRequired();
+      });
+
+      // Clear all data
       document.getElementById('clear-data').addEventListener('click', () => {
         if(confirm('Clear all saved records?')) {
           saveRecords([]);
@@ -623,7 +611,6 @@
         const rows = loadRecords();
         if(rows.length === 0) return alert('No data to export');
 
-        // En-têtes lisibles (comme dans le formulaire)
         const headerMap = {
           date: 'Date',
           channel: 'Sales channel',
@@ -647,7 +634,6 @@
           advancedMarketFees: 'Advanced market fees (UGX)'
         };
 
-        // Conversion objets internes -> colonnes lisibles
         const exportRows = rows.map(r => {
           const o = {};
           for (const [k,label] of Object.entries(headerMap)) {
@@ -671,7 +657,6 @@
     <!-- Service worker (corrigé) -->
     <script>
       if ('serviceWorker' in navigator) {
-        // Si tu déploies sur GitHub Pages à /Hawking-sales/, garde ces chemins :
         navigator.serviceWorker.register('/Hawking-sales/sw.js', { scope: '/Hawking-sales/' })
           .catch(console.error);
       }
