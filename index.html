@@ -343,19 +343,21 @@
 
       // Règle canal → Flat wedge & commission par défaut
       function applyChannelDefaults(){
-        const ch = el('channel').value;
-        if (ch === 'Market sales') {
-          flatRate.value = 5000;
-          // pas de changement auto sur commissionRate ici
-        } else if (ch === 'Hawking') {
-          flatRate.value = 0;
-        } else if (ch === '') {
-          // Canal non sélectionné → flat = 0, commission = 0
-          flatRate.value = 0;
-          commissionRate.value = 0;
-        }
-        compute();
-      }
+  const ch = el('channel').value;
+  if (ch === 'Market sales') {
+    flatRate.value = 5000;
+    commissionRate.value = 20; // <-- ajout
+  } else if (ch === 'Hawking') {
+    flatRate.value = 0;
+    commissionRate.value = 20; // <-- ajout
+  } else if (ch === '') {
+    // Canal non sélectionné → flat = 0, commission = 0
+    flatRate.value = 0;
+    commissionRate.value = 0;
+  }
+  compute();
+}
+
 
       // Anti scroll change on number inputs
       document.addEventListener('wheel', (e) => {
