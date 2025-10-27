@@ -664,7 +664,14 @@
         XLSX.writeFile(wb, fname);
       });
     </script>
-
+// Clear all data (records + table)
+el('clear-data').addEventListener('click', () => {
+  if (confirm('Are you sure you want to delete ALL recorded data?')) {
+    localStorage.removeItem(STORAGE_KEY); // supprime toutes les données sauvegardées
+    renderTable(); // vide le tableau d’affichage
+    alert('All records have been cleared.');
+  }
+});
     <!-- Service worker (corrigé) -->
     <script>
       if ('serviceWorker' in navigator) {
