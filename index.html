@@ -179,7 +179,7 @@
           </div>
           <div class="row">
             <div class="span-6">
-              <label for="flatRate">Flat rate (UGX)</label>
+              <label for="flatRate">Flat wedge (UGX)</label>
               <input type="number" id="flatRate" step="1" min="0" />
             </div>
             <div class="span-6">
@@ -251,7 +251,7 @@
                 <th>Discrepancies (UGX)</th>
                 <th>Commission rate (%)</th>
                 <th>Commission (UGX)</th>
-                <th>Flat rate (UGX)</th>
+                <th>Flat wedge (UGX)</th>
                 <th>Total to pay (UGX)</th>
                 <th>Market fees (UGX)</th>
                 <th>Advanced market fees (UGX)</th>
@@ -297,7 +297,7 @@
       const closingKg = el('closingKg');
       const actualSales = el('actualSales');
       const cash = el('cash');
-      const flatRate = el('flatRate');
+      const flatRate = el('flatRate'); // "Flat wedge" en UI
       const commissionRate = el('commissionRate');
       const marketFees = el('marketFees');
       const advancedMarketFees = el('advancedMarketFees');
@@ -326,13 +326,33 @@
         return null;
       };
 
-      // Initialize defaults
+      // Initialise defaults produit (met 0 si pas de produit)
       const applyProductDefaults = () => {
-        const d = getDefaultsFor(product.value) || defaults.Kikalayi;
-        unitPrice.value = d.price;
-        portionWeight.value = d.weight;
+        const val = (product.value || '').trim();
+        if (!val) {
+          unitPrice.value = 0;
+          portionWeight.value = 0;
+        } else {
+          const d = getDefaultsFor(val) || defaults.Kikalayi;
+          unitPrice.value = d.price;
+          portionWeight.value = d.weight;
+        }
         compute();
       };
+
+      // Règle canal → Flat wedge par défaut
+      function applyChannelDefaults(){
+        const ch = el('channel').value;
+        if (ch === 'Market sales') {
+          flatRate.value = 5000;
+        } else if (ch === 'Hawking') {
+          flatRate.value = 0;
+        }
+        compute();
+      }
+
+      // Alert spam guard
+      let warnedCashOver = false;
 
       // Live compute
       const compute = () => {
@@ -359,6 +379,16 @@
         kpiDis.textContent   = UGX(discrepancy).toLocaleString();
         kpiCom.textContent   = UGX(commission).toLocaleString();
         kpiTotal.textContent = UGX(totalToPay).toLocaleString();
+
+        // Alerte si cash > ventes (discrepancy négative)
+        if (discrepancy < 0) {
+          if (!warnedCashOver) {
+            alert(`Warning: Cash collected exceeds computed sales by ${Math.abs(discrepancy).toLocaleString()} UGX. Please review price, issued/closing quantities, and cash entry.`);
+            warnedCashOver = true;
+          }
+        } else {
+          warnedCashOver = false;
+        }
       };
 
       // --- Fees-only mode ---
@@ -366,20 +396,55 @@
         return num(marketFees.value) > 0 || num(advancedMarketFees.value) > 0;
       }
 
-      // Bascule dynamiquement les champs required
+      // Champs required (General + Product + Financial) sauf si fees-only
       function updateRequired(){
         const feesOnly = isFeesOnlyMode();
 
-        // Date est TOUJOURS requise
+        // Date toujours requise
         el('date').required = true;
 
-        // Tous les autres champs deviennent non requis en fees-only
-        const maybeRequired = ['sa','area','channel','product'];
-        maybeRequired.forEach(id => {
+        // Champs obligatoires (hors readonly)
+        const requiredIds = [
+          'channel','product','sa','area',
+          'unitPrice','portionWeight','issuedPortions','closingPortions',
+          'cash','commissionRate','flatRate'
+        ];
+
+        requiredIds.forEach(id => {
           const node = el(id);
           if (!node) return;
           node.required = !feesOnly;
         });
+      }
+
+      // Vérification stricte au submit
+      function ensureRequired(){
+        if (!el('date').value) { alert('Please fill: Date'); return false; }
+
+        if (isFeesOnlyMode()) return true;
+
+        const fields = [
+          ['channel','Sales channel'],
+          ['product','Product'],
+          ['sa','SA name'],
+          ['area','Selling area'],
+          ['unitPrice','Unit price'],
+          ['portionWeight','Portion weight'],
+          ['issuedPortions','Stock issued (portions)'],
+          ['closingPortions','Closing balance (portions)'],
+          ['cash','Cash collected'],
+          ['commissionRate','Commission rate'],
+          ['flatRate','Flat wedge']
+        ];
+
+        for (const [id,label] of fields){
+          const n = el(id);
+          if (!n || n.value === '' || n.value === null) {
+            alert('Please fill: ' + label);
+            return false;
+          }
+        }
+        return true;
       }
 
       // Écouteurs: tout ce qui peut impacter le calcul
@@ -391,11 +456,22 @@
       // Defaults à chaque changement/édition du produit
       ['change','input'].forEach(evt => product.addEventListener(evt, applyProductDefaults));
 
+      // Règles canal
+      ['change','input'].forEach(evt => el('channel').addEventListener(evt, applyChannelDefaults));
+
       // Suivi fees → update required
       [marketFees, advancedMarketFees].forEach(x => {
         x.addEventListener('input', updateRequired);
         x.addEventListener('change', updateRequired);
       });
+
+      // Empêche la molette de modifier les <input type="number"> quand ils sont focus
+      document.addEventListener('wheel', (e) => {
+        const t = e.target;
+        if (t && t.tagName === 'INPUT' && t.type === 'number') {
+          t.blur();
+        }
+      }, { passive: true });
 
       // Set initial values (sécurisé)
       function setToday() {
@@ -406,49 +482,14 @@
 
       (function init(){
         commissionRate.value = 20;
-        flatRate.value = 5000;
+        flatRate.value = 5000;   // valeur par défaut avant choix du canal
         setToday();
-        applyProductDefaults();
+        applyChannelDefaults();  // applique 5000 (Market) / 0 (Hawking) si un canal est déjà choisi
+        applyProductDefaults();  // met 0 si pas de produit sélectionné
         compute();
         renderTable();
         updateRequired(); // initialise les contraintes
       })();
-
-      // Basic required fields check
-      function ensureRequired(){
-        // Date est toujours requise
-        if (!el('date').value) { alert('Please fill: date'); return false; }
-
-        // En fees-only, on ne vérifie rien d'autre
-        if (isFeesOnlyMode()) return true;
-
-        // Sinon, règle d'origine
-        const fields = ['sa','area'];
-        for(const id of fields){
-          if(!el(id).value){
-            alert('Please fill: ' + id);
-            return false;
-          }
-        }
-        return true;
-      }
-
-      // Submit
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        if(!ensureRequired()) return;
-        compute();
-        const row = collectFormData();
-        const rows = loadRecords();
-        rows.unshift(row);
-        saveRecords(rows);
-        renderTable();
-        form.reset();
-        setToday();
-        commissionRate.value = 20; flatRate.value = 5000;
-        applyProductDefaults(); compute();
-        updateRequired();
-      });
 
       // Collect form values + computed
       function collectFormData(){
@@ -467,7 +508,7 @@
         const actual = UGX((num(issuedPortions.value) - num(closingPortions.value)) * num(unitPrice.value));
         const rate = Number(num(commissionRate.value));
         const commission = UGX((rate/100) * actual);
-        const flat = UGX(num(flatRate.value));
+        const flat = UGX(num(flatRate.value)); // Flat wedge
         const discrepancy = UGX(actual - cashCollected);              // actual - cash
         const totalToPay  = UGX(flat + commission - discrepancy);     // unified formula
         const mFees = UGX(num(marketFees.value));
@@ -525,12 +566,31 @@
         renderTable();
       });
 
+      // Submit
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if(!ensureRequired()) return;
+        compute();
+        const row = collectFormData();
+        const rows = loadRecords();
+        rows.unshift(row);
+        saveRecords(rows);
+        renderTable();
+        form.reset();
+        setToday();
+        commissionRate.value = 20; flatRate.value = 5000;
+        applyChannelDefaults();
+        applyProductDefaults(); compute();
+        updateRequired();
+      });
+
       // Reset form
       el('reset-form').addEventListener('click', () => {
         form.reset();
         setToday();
         commissionRate.value = 20;
         flatRate.value = 5000;
+        applyChannelDefaults();
         applyProductDefaults();
         compute();
         updateRequired();
@@ -539,30 +599,63 @@
       // Recompute when these change
       [cash, marketFees, advancedMarketFees].forEach(x => x.addEventListener('input', compute));
 
-      // Export XLSX only
+      // Export XLSX (nom auto: BA Payment - YYYYMMDD.xlsx + entêtes lisibles)
       document.getElementById('export-xlsx').addEventListener('click', () => {
         const rows = loadRecords();
         if(rows.length === 0) return alert('No data to export');
-        const ws = XLSX.utils.json_to_sheet(rows);
+
+        // En-têtes lisibles (comme dans le formulaire)
+        const headerMap = {
+          date: 'Date',
+          channel: 'Sales channel',
+          prod: 'Product',
+          sa: 'SA name',
+          area: 'Selling area',
+          price: 'Unit price (UGX)',
+          weight: 'Portion weight (kg)',
+          issuedP: 'Stock issued (portions)',
+          issuedK: 'Stock issued (kg)',
+          closingP: 'Closing balance (portions)',
+          closingK: 'Closing balance (kg)',
+          cashCollected: 'Cash collected (UGX)',
+          actual: 'Actual sales (UGX)',
+          discrepancy: 'Discrepancies (UGX)',
+          rate: 'Commission rate (%)',
+          commission: 'Commission (UGX)',
+          flat: 'Flat wedge (UGX)',
+          totalToPay: 'Total amount to be paid (UGX)',
+          marketFees: 'Market fees (UGX)',
+          advancedMarketFees: 'Advanced market fees (UGX)'
+        };
+
+        // Conversion objets internes -> colonnes lisibles
+        const exportRows = rows.map(r => {
+          const o = {};
+          for (const [k,label] of Object.entries(headerMap)) {
+            o[label] = r[k];
+          }
+          return o;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(exportRows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'BA payment');
-        XLSX.writeFile(wb, 'ba_payment.xlsx');
-      });
 
-      // Clear all data
-      document.getElementById('clear-data').addEventListener('click', () => {
-        if(confirm('Clear all saved records?')) {
-          saveRecords([]);
-          renderTable();
-        }
+        const pad = (n)=> String(n).padStart(2,'0');
+        const d = new Date();
+        const fname = `BA Payment - ${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.xlsx`;
+
+        XLSX.writeFile(wb, fname);
       });
     </script>
 
+    <!-- Service worker (corrigé) -->
     <script>
-      'serviceWorker' in navigator &&
-        navigator.serviceWorker
-          .register('/Hawking-sales/sw.js', { scope: '/Hawking-sales/' })
+      if ('serviceWorker' in navigator) {
+        // Si tu déploies sur GitHub Pages à /Hawking-sales/, garde ces chemins :
+        navigator.serviceWorker.register('/Hawking-sales/sw.js', { scope: '/Hawking-sales/' })
           .catch(console.error);
+      }
     </script>
   </body>
 </html>
