@@ -86,6 +86,7 @@
       <p style="max-width:760px">BA payment is a lightweight, single-page web app (HTML/CSS/JS, in English) designed to record and automatically calculate daily sales data for selling agents. It stores records locally in the browser, with options to export data to .xlsx.</p>
       <div class="cta">
         <a class="btn primary" href="#form">Record data</a>
+        <!-- (Clear all data button moved into the form actions below) -->
       </div>
     </div>
 
@@ -340,22 +341,19 @@
         compute();
       };
 
-      // ✅ Règle canal → valeurs par défaut pour commission & flat
+      // Règle canal → Flat wedge & commission par défaut
       function applyChannelDefaults(){
         const ch = el('channel').value;
-
         if (ch === 'Market sales') {
-          commissionRate.value = 20;
           flatRate.value = 5000;
+          // pas de changement auto sur commissionRate ici
         } else if (ch === 'Hawking') {
-          commissionRate.value = 20;
           flatRate.value = 0;
-        } else {
-          // Aucun canal sélectionné
+        } else if (ch === '') {
+          // Canal non sélectionné → flat = 0, commission = 0
+          flatRate.value = 0;
           commissionRate.value = 0;
-          flatRate.value = 0;
         }
-
         compute();
       }
 
@@ -391,6 +389,36 @@
           if (!node) return;
           node.required = !feesOnly;
         });
+      }
+
+      // Vérification stricte au submit
+      function ensureRequired(){
+        if (!el('date').value) { alert('Please fill: Date'); return false; }
+
+        if (isFeesOnlyMode()) return true;
+
+        const fields = [
+          ['channel','Sales channel'],
+          ['product','Product'],
+          ['sa','SA name'],
+          ['area','Selling area'],
+          ['unitPrice','Unit price'],
+          ['portionWeight','Portion weight'],
+          ['issuedPortions','Stock issued (portions)'],
+          ['closingPortions','Closing balance (portions)'],
+          ['cash','Cash collected'],
+          ['commissionRate','Commission rate'],
+          ['flatRate','Flat wedge']
+        ];
+
+        for (const [id,label] of fields){
+          const n = el(id);
+          if (!n || n.value === '' || n.value === null) {
+            alert('Please fill: ' + label);
+            return false;
+          }
+        }
+        return true;
       }
 
       // Alert spam guard
@@ -549,36 +577,6 @@
         renderTable();
       });
 
-      // Vérification stricte au submit
-      function ensureRequired(){
-        if (!el('date').value) { alert('Please fill: Date'); return false; }
-
-        if (isFeesOnlyMode()) return true;
-
-        const fields = [
-          ['channel','Sales channel'],
-          ['product','Product'],
-          ['sa','SA name'],
-          ['area','Selling area'],
-          ['unitPrice','Unit price'],
-          ['portionWeight','Portion weight'],
-          ['issuedPortions','Stock issued (portions)'],
-          ['closingPortions','Closing balance (portions)'],
-          ['cash','Cash collected'],
-          ['commissionRate','Commission rate'],
-          ['flatRate','Flat wedge']
-        ];
-
-        for (const [id,label] of fields){
-          const n = el(id);
-          if (!n || n.value === '' || n.value === null) {
-            alert('Please fill: ' + label);
-            return false;
-          }
-        }
-        return true;
-      }
-
       // Submit
       form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -609,17 +607,16 @@
         updateRequired();
       });
 
-      // Recompute when these change
-      [cash, marketFees, advancedMarketFees].forEach(x => x.addEventListener('input', compute));
-
-      // ✅ Clear all data (records + table uniquement, ne touche pas le formulaire)
-      el('clear-data').addEventListener('click', () => {
-        if (confirm('Are you sure you want to delete ALL recorded data?')) {
-          localStorage.removeItem(STORAGE_KEY);
+      // Clear all data (désormais à côté de Record/Reset)
+      document.getElementById('clear-data').addEventListener('click', () => {
+        if(confirm('Clear all saved records?')) {
+          saveRecords([]);
           renderTable();
-          alert('All records have been cleared.');
         }
       });
+
+      // Recompute when these change
+      [cash, marketFees, advancedMarketFees].forEach(x => x.addEventListener('input', compute));
 
       // Export XLSX (nom auto: BA Payment - YYYYMMDD.xlsx + entêtes lisibles)
       document.getElementById('export-xlsx').addEventListener('click', () => {
