@@ -86,7 +86,7 @@
       <p style="max-width:760px">BA payment is a lightweight, single-page web app (HTML/CSS/JS, in English) designed to record and automatically calculate daily sales data for selling agents. It stores records locally in the browser, with options to export data to .xlsx.</p>
       <div class="cta">
         <a class="btn primary" href="#form">Record data</a>
-        <button class="btn" id="clear-data">Clear all data</button>
+        <!-- (Clear all data button moved into the form actions below) -->
       </div>
     </div>
 
@@ -219,6 +219,7 @@
           <div class="cta" style="margin-top: 14px;">
             <button class="btn primary" type="submit">Record data</button>
             <button class="btn" type="button" id="reset-form">Reset</button>
+            <button class="btn warn" type="button" id="clear-data">Clear all data</button>
           </div>
         </form>
       </section>
@@ -340,58 +341,31 @@
         compute();
       };
 
-      // Règle canal → Flat wedge par défaut
+      // Règle canal → Flat wedge & commission par défaut
       function applyChannelDefaults(){
         const ch = el('channel').value;
         if (ch === 'Market sales') {
           flatRate.value = 5000;
+          // pas de changement auto sur commissionRate ici
         } else if (ch === 'Hawking') {
           flatRate.value = 0;
+        } else if (ch === '') {
+          // Canal non sélectionné → flat = 0, commission = 0
+          flatRate.value = 0;
+          commissionRate.value = 0;
         }
         compute();
       }
 
-      // Alert spam guard
-      let warnedCashOver = false;
-
-      // Live compute
-      const compute = () => {
-        const w = num(portionWeight.value);
-        const issuedP = num(issuedPortions.value);
-        const closingP = num(closingPortions.value);
-        const price = num(unitPrice.value);
-
-        const issuedK = issuedP * w;
-        const closingK = closingP * w;
-
-        issuedKg.value = KG3(issuedK);
-        closingKg.value = KG3(closingK);
-
-        const actual = (issuedP - closingP) * price;
-        actualSales.value = UGX(actual);
-
-        // --- unified formula ---
-        const discrepancy = UGX(actual) - UGX(num(cash.value));            // actual - cash
-        const commission  = UGX((num(commissionRate.value) / 100) * UGX(actual));
-        const flat        = UGX(num(flatRate.value));
-        const totalToPay  = UGX(flat + commission - discrepancy);           // flat + commission - discrepancy
-
-        kpiDis.textContent   = UGX(discrepancy).toLocaleString();
-        kpiCom.textContent   = UGX(commission).toLocaleString();
-        kpiTotal.textContent = UGX(totalToPay).toLocaleString();
-
-        // Alerte si cash > ventes (discrepancy négative)
-        if (discrepancy < 0) {
-          if (!warnedCashOver) {
-            alert(`Warning: Cash collected exceeds computed sales by ${Math.abs(discrepancy).toLocaleString()} UGX. Please review price, issued/closing quantities, and cash entry.`);
-            warnedCashOver = true;
-          }
-        } else {
-          warnedCashOver = false;
+      // Anti scroll change on number inputs
+      document.addEventListener('wheel', (e) => {
+        const t = e.target;
+        if (t && t.tagName === 'INPUT' && t.type === 'number') {
+          t.blur();
         }
-      };
+      }, { passive: true });
 
-      // --- Fees-only mode ---
+      // Fees-only mode
       function isFeesOnlyMode(){
         return num(marketFees.value) > 0 || num(advancedMarketFees.value) > 0;
       }
@@ -447,6 +421,66 @@
         return true;
       }
 
+      // Alert spam guard
+      let warnedCashOver = false;
+
+      // Live compute (inclut la règle: channel vide => commission=0 & flat=0)
+      const compute = () => {
+        const w = num(portionWeight.value);
+        const issuedP = num(issuedPortions.value);
+        const closingP = num(closingPortions.value);
+        const price = num(unitPrice.value);
+
+        const issuedK = issuedP * w;
+        const closingK = closingP * w;
+
+        issuedKg.value = KG3(issuedK);
+        closingKg.value = KG3(closingK);
+
+        const actual = (issuedP - closingP) * price;
+        actualSales.value = UGX(actual);
+
+        const ch = el('channel').value;
+        const effectiveRate = (ch === '' ? 0 : num(commissionRate.value));
+        const flatVal      = (ch === '' ? 0 : UGX(num(flatRate.value)));
+
+        const discrepancy = UGX(actual) - UGX(num(cash.value));            // actual - cash
+        const commission  = UGX((effectiveRate / 100) * UGX(actual));
+        const totalToPay  = UGX(flatVal + commission - discrepancy);       // flat + commission - discrepancy
+
+        kpiDis.textContent   = UGX(discrepancy).toLocaleString();
+        kpiCom.textContent   = UGX(commission).toLocaleString();
+        kpiTotal.textContent = UGX(totalToPay).toLocaleString();
+
+        // Alerte si cash > ventes (discrepancy négative)
+        if (discrepancy < 0) {
+          if (!warnedCashOver) {
+            alert(`Warning: Cash collected exceeds computed sales by ${Math.abs(discrepancy).toLocaleString()} UGX. Please review price, issued/closing quantities, and cash entry.`);
+            warnedCashOver = true;
+          }
+        } else {
+          warnedCashOver = false;
+        }
+      };
+
+      // Set initial values (sécurisé)
+      function setToday() {
+        const d = el('date');
+        try { d.valueAsDate = new Date(); }
+        catch { d.value = new Date().toISOString().slice(0,10); }
+      }
+
+      (function init(){
+        commissionRate.value = 20;
+        flatRate.value = 5000;   // valeur par défaut avant choix du canal
+        setToday();
+        applyChannelDefaults();  // applique aussi règle canal vide => 0 / 0
+        applyProductDefaults();  // met 0 si pas de produit sélectionné
+        compute();
+        renderTable();
+        updateRequired(); // initialise les contraintes
+      })();
+
       // Écouteurs: tout ce qui peut impacter le calcul
       ['input','change'].forEach(evt => {
         [product, portionWeight, issuedPortions, closingPortions, unitPrice, cash, commissionRate, flatRate]
@@ -465,32 +499,6 @@
         x.addEventListener('change', updateRequired);
       });
 
-      // Empêche la molette de modifier les <input type="number"> quand ils sont focus
-      document.addEventListener('wheel', (e) => {
-        const t = e.target;
-        if (t && t.tagName === 'INPUT' && t.type === 'number') {
-          t.blur();
-        }
-      }, { passive: true });
-
-      // Set initial values (sécurisé)
-      function setToday() {
-        const d = el('date');
-        try { d.valueAsDate = new Date(); }
-        catch { d.value = new Date().toISOString().slice(0,10); }
-      }
-
-      (function init(){
-        commissionRate.value = 20;
-        flatRate.value = 5000;   // valeur par défaut avant choix du canal
-        setToday();
-        applyChannelDefaults();  // applique 5000 (Market) / 0 (Hawking) si un canal est déjà choisi
-        applyProductDefaults();  // met 0 si pas de produit sélectionné
-        compute();
-        renderTable();
-        updateRequired(); // initialise les contraintes
-      })();
-
       // Collect form values + computed
       function collectFormData(){
         const date = el('date').value;
@@ -506,9 +514,12 @@
         const closingK = Number((num(closingPortions.value) * num(portionWeight.value)).toFixed(3));
         const cashCollected = UGX(num(cash.value));
         const actual = UGX((num(issuedPortions.value) - num(closingPortions.value)) * num(unitPrice.value));
-        const rate = Number(num(commissionRate.value));
-        const commission = UGX((rate/100) * actual);
-        const flat = UGX(num(flatRate.value)); // Flat wedge
+
+        // Applique la règle channel vide
+        const effectiveRate = (channel === '' ? 0 : Number(num(commissionRate.value)));
+        const commission = UGX((effectiveRate/100) * actual);
+        const flat = (channel === '' ? 0 : UGX(num(flatRate.value)));
+
         const discrepancy = UGX(actual - cashCollected);              // actual - cash
         const totalToPay  = UGX(flat + commission - discrepancy);     // unified formula
         const mFees = UGX(num(marketFees.value));
@@ -517,12 +528,12 @@
         return {
           date, channel, prod, sa, area,
           price, weight, issuedP, issuedK, closingP, closingK,
-          cashCollected, actual, discrepancy, rate, commission, flat, totalToPay,
+          cashCollected, actual, discrepancy, rate: effectiveRate, commission, flat, totalToPay,
           marketFees: mFees, advancedMarketFees: aFees
         };
       }
 
-      // Render table
+      // Render table (Commission rate avec %)
       function renderTable(){
         const rows = loadRecords();
         tbody.innerHTML = '';
@@ -543,7 +554,7 @@
             <td>${(r.cashCollected||0).toLocaleString()}</td>
             <td>${(r.actual||0).toLocaleString()}</td>
             <td>${(r.discrepancy||0).toLocaleString()}</td>
-            <td>${r.rate||0}</td>
+            <td>${(r.rate != null && r.rate !== '' ? r.rate + '%' : '0%')}</td>
             <td>${(r.commission||0).toLocaleString()}</td>
             <td>${(r.flat||0).toLocaleString()}</td>
             <td>${(r.totalToPay||0).toLocaleString()}</td>
@@ -594,6 +605,14 @@
         applyProductDefaults();
         compute();
         updateRequired();
+      });
+
+      // Clear all data (désormais à côté de Record/Reset)
+      document.getElementById('clear-data').addEventListener('click', () => {
+        if(confirm('Clear all saved records?')) {
+          saveRecords([]);
+          renderTable();
+        }
       });
 
       // Recompute when these change
