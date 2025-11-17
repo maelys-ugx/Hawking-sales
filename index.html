@@ -67,6 +67,7 @@
       footer { border-top: 1px solid var(--border); color: var(--muted); padding: 18px 0 40px; font-size: 14px; }
     </style>
   </head>
+
   <body>
     <header>
       <div class="container nav">
@@ -86,7 +87,6 @@
       <p style="max-width:760px">BA payment is a lightweight, single-page web app (HTML/CSS/JS, in English) designed to record and automatically calculate daily sales data for selling agents. It stores records locally in the browser, with options to export data to .xlsx.</p>
       <div class="cta">
         <a class="btn primary" href="#form">Record data</a>
-        <!-- (Clear all data button moved into the form actions below) -->
       </div>
     </div>
 
@@ -111,6 +111,7 @@
               </select>
             </div>
           </div>
+
           <div class="row">
             <div class="span-6">
               <label for="product">Product</label>
@@ -120,15 +121,45 @@
                 <option value="Skewers">Skewers</option>
               </select>
             </div>
+
+            <!-- SA LISTE DÉROULANTE ALPHABÉTIQUE -->
             <div class="span-6">
               <label for="sa">SA name</label>
-              <input type="text" id="sa" placeholder="Agent name" required />
+              <select id="sa" required>
+                <option value="">—</option>
+                <option value="Bridget">Bridget</option>
+                <option value="Doreen">Doreen</option>
+                <option value="Evelyne">Evelyne</option>
+                <option value="Lydia">Lydia</option>
+                <option value="Moreen">Moreen</option>
+                <option value="New 1">New 1</option>
+                <option value="New 2">New 2</option>
+                <option value="Nicholas">Nicholas</option>
+                <option value="Peter">Peter</option>
+                <option value="Ronald">Ronald</option>
+                <option value="Sarah B.">Sarah B.</option>
+                <option value="Sarah K.">Sarah K.</option>
+                <option value="Sunny">Sunny</option>
+              </select>
             </div>
           </div>
+
           <div class="row">
+            <!-- SELLING AREAS LISTE DÉROULANTE ALPHABÉTIQUE -->
             <div class="span-12">
               <label for="area">Selling area</label>
-              <input type="text" id="area" placeholder="Area / Market" required />
+              <select id="area" required>
+                <option value="">—</option>
+                <option value="Buhimba">Buhimba</option>
+                <option value="Hoima City">Hoima City</option>
+                <option value="Kigorobya">Kigorobya</option>
+                <option value="Kinogozi">Kinogozi</option>
+                <option value="Kisalizi">Kisalizi</option>
+                <option value="Kyakapeya">Kyakapeya</option>
+                <option value="Mbarrara">Mbarrara</option>
+                <option value="New area 1">New area 1</option>
+                <option value="New area 2">New area 2</option>
+              </select>
             </div>
           </div>
 
@@ -281,13 +312,11 @@
       const KG3 = (n) => (isFinite(n) ? Number(n).toFixed(3) : (0).toFixed(3));
       const num = (n) => (n === '' || n === null || n === undefined ? 0 : Number(n));
 
-      // Defaults per product
       const defaults = {
         Kikalayi: { price: 500,  weight: 0.03  },
         Skewers:  { price: 1000, weight: 0.045 },
       };
 
-      // Elements
       const el = (id) => document.getElementById(id);
       const product = el('product');
       const unitPrice = el('unitPrice');
@@ -298,7 +327,7 @@
       const closingKg = el('closingKg');
       const actualSales = el('actualSales');
       const cash = el('cash');
-      const flatRate = el('flatRate'); // "Flat wedge" en UI
+      const flatRate = el('flatRate');
       const commissionRate = el('commissionRate');
       const marketFees = el('marketFees');
       const advancedMarketFees = el('advancedMarketFees');
@@ -310,16 +339,13 @@
       const form = el('sales-form');
       const tbody = el('tbody');
 
-      // Footer info
       el('year').textContent = new Date().getFullYear();
       el('source-link').href = '#';
 
-      // Local storage
       const STORAGE_KEY = 'ba_payment_records_v1_2';
       const loadRecords = () => JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
       const saveRecords = (rows) => localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
 
-      // --- Defaults mapping ---
       const getDefaultsFor = (name) => {
         const key = String(name || '').toLowerCase().trim();
         if (key.startsWith('kikal')) return defaults.Kikalayi;
@@ -327,7 +353,6 @@
         return null;
       };
 
-      // Initialise defaults produit (met 0 si pas de produit)
       const applyProductDefaults = () => {
         const val = (product.value || '').trim();
         if (!val) {
@@ -341,25 +366,21 @@
         compute();
       };
 
-      // Règle canal → Flat wedge & commission par défaut
       function applyChannelDefaults(){
-  const ch = el('channel').value;
-  if (ch === 'Market sales') {
-    flatRate.value = 5000;
-    commissionRate.value = 20; // <-- ajout
-  } else if (ch === 'Hawking') {
-    flatRate.value = 0;
-    commissionRate.value = 20; // <-- ajout
-  } else if (ch === '') {
-    // Canal non sélectionné → flat = 0, commission = 0
-    flatRate.value = 0;
-    commissionRate.value = 0;
-  }
-  compute();
-}
+        const ch = el('channel').value;
+        if (ch === 'Market sales') {
+          flatRate.value = 5000;
+          commissionRate.value = 20;
+        } else if (ch === 'Hawking') {
+          flatRate.value = 0;
+          commissionRate.value = 20;
+        } else if (ch === '') {
+          flatRate.value = 0;
+          commissionRate.value = 0;
+        }
+        compute();
+      }
 
-
-      // Anti scroll change on number inputs
       document.addEventListener('wheel', (e) => {
         const t = e.target;
         if (t && t.tagName === 'INPUT' && t.type === 'number') {
@@ -367,19 +388,14 @@
         }
       }, { passive: true });
 
-      // Fees-only mode
       function isFeesOnlyMode(){
         return num(marketFees.value) > 0 || num(advancedMarketFees.value) > 0;
       }
 
-      // Champs required (General + Product + Financial) sauf si fees-only
       function updateRequired(){
         const feesOnly = isFeesOnlyMode();
-
-        // Date toujours requise
         el('date').required = true;
 
-        // Champs obligatoires (hors readonly)
         const requiredIds = [
           'channel','product','sa','area',
           'unitPrice','portionWeight','issuedPortions','closingPortions',
@@ -393,7 +409,6 @@
         });
       }
 
-      // Vérification stricte au submit
       function ensureRequired(){
         if (!el('date').value) { alert('Please fill: Date'); return false; }
 
@@ -423,10 +438,8 @@
         return true;
       }
 
-      // Alert spam guard
       let warnedCashOver = false;
 
-      // Live compute (inclut la règle: channel vide => commission=0 & flat=0)
       const compute = () => {
         const w = num(portionWeight.value);
         const issuedP = num(issuedPortions.value);
@@ -446,15 +459,14 @@
         const effectiveRate = (ch === '' ? 0 : num(commissionRate.value));
         const flatVal      = (ch === '' ? 0 : UGX(num(flatRate.value)));
 
-        const discrepancy = UGX(actual) - UGX(num(cash.value));            // actual - cash
+        const discrepancy = UGX(actual) - UGX(num(cash.value));
         const commission  = UGX((effectiveRate / 100) * UGX(actual));
-        const totalToPay  = UGX(flatVal + commission - discrepancy);       // flat + commission - discrepancy
+        const totalToPay  = UGX(flatVal + commission - discrepancy);
 
         kpiDis.textContent   = UGX(discrepancy).toLocaleString();
         kpiCom.textContent   = UGX(commission).toLocaleString();
         kpiTotal.textContent = UGX(totalToPay).toLocaleString();
 
-        // Alerte si cash > ventes (discrepancy négative)
         if (discrepancy < 0) {
           if (!warnedCashOver) {
             alert(`Warning: Cash collected exceeds computed sales by ${Math.abs(discrepancy).toLocaleString()} UGX. Please review price, issued/closing quantities, and cash entry.`);
@@ -465,7 +477,6 @@
         }
       };
 
-      // Set initial values (sécurisé)
       function setToday() {
         const d = el('date');
         try { d.valueAsDate = new Date(); }
@@ -474,34 +485,28 @@
 
       (function init(){
         commissionRate.value = 20;
-        flatRate.value = 5000;   // valeur par défaut avant choix du canal
+        flatRate.value = 5000;
         setToday();
-        applyChannelDefaults();  // applique aussi règle canal vide => 0 / 0
-        applyProductDefaults();  // met 0 si pas de produit sélectionné
+        applyChannelDefaults();
+        applyProductDefaults();
         compute();
         renderTable();
-        updateRequired(); // initialise les contraintes
+        updateRequired();
       })();
 
-      // Écouteurs: tout ce qui peut impacter le calcul
       ['input','change'].forEach(evt => {
         [product, portionWeight, issuedPortions, closingPortions, unitPrice, cash, commissionRate, flatRate]
           .forEach(x => x.addEventListener(evt, compute));
       });
 
-      // Defaults à chaque changement/édition du produit
       ['change','input'].forEach(evt => product.addEventListener(evt, applyProductDefaults));
-
-      // Règles canal
       ['change','input'].forEach(evt => el('channel').addEventListener(evt, applyChannelDefaults));
 
-      // Suivi fees → update required
       [marketFees, advancedMarketFees].forEach(x => {
         x.addEventListener('input', updateRequired);
         x.addEventListener('change', updateRequired);
       });
 
-      // Collect form values + computed
       function collectFormData(){
         const date = el('date').value;
         const channel = el('channel').value;
@@ -517,25 +522,23 @@
         const cashCollected = UGX(num(cash.value));
         const actual = UGX((num(issuedPortions.value) - num(closingPortions.value)) * num(unitPrice.value));
 
-        // Applique la règle channel vide
         const effectiveRate = (channel === '' ? 0 : Number(num(commissionRate.value)));
         const commission = UGX((effectiveRate/100) * actual);
         const flat = (channel === '' ? 0 : UGX(num(flatRate.value)));
 
-        const discrepancy = UGX(actual - cashCollected);              // actual - cash
-        const totalToPay  = UGX(flat + commission - discrepancy);     // unified formula
+        const discrepancy = UGX(actual - cashCollected);
+        const totalToPay  = UGX(flat + commission - discrepancy);
         const mFees = UGX(num(marketFees.value));
         const aFees = UGX(num(advancedMarketFees.value));
 
         return {
           date, channel, prod, sa, area,
           price, weight, issuedP, issuedK, closingP, closingK,
-          cashCollected, actual, discrepancy, rate: effectiveRate, commission, flat, totalToPay,
-          marketFees: mFees, advancedMarketFees: aFees
+          cashCollected, actual, discrepancy, rate: effectiveRate,
+          commission, flat, totalToPay, marketFees: mFees, advancedMarketFees: aFees
         };
       }
 
-      // Render table (Commission rate avec %)
       function renderTable(){
         const rows = loadRecords();
         tbody.innerHTML = '';
@@ -568,7 +571,6 @@
         });
       }
 
-      // Delete row
       tbody.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-del]');
         if(!btn) return;
@@ -579,7 +581,6 @@
         renderTable();
       });
 
-      // Submit
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         if(!ensureRequired()) return;
@@ -591,13 +592,14 @@
         renderTable();
         form.reset();
         setToday();
-        commissionRate.value = 20; flatRate.value = 5000;
+        commissionRate.value = 20;
+        flatRate.value = 5000;
         applyChannelDefaults();
-        applyProductDefaults(); compute();
+        applyProductDefaults(); 
+        compute();
         updateRequired();
       });
 
-      // Reset form
       el('reset-form').addEventListener('click', () => {
         form.reset();
         setToday();
@@ -609,23 +611,19 @@
         updateRequired();
       });
 
-      // Clear all data (désormais à côté de Record/Reset)
-      document.getElementById('clear-data').addEventListener('click', () => {
+      el('clear-data').addEventListener('click', () => {
         if(confirm('Clear all saved records?')) {
           saveRecords([]);
           renderTable();
         }
       });
 
-      // Recompute when these change
       [cash, marketFees, advancedMarketFees].forEach(x => x.addEventListener('input', compute));
 
-      // Export XLSX (nom auto: BA Payment - YYYYMMDD.xlsx + entêtes lisibles)
-      document.getElementById('export-xlsx').addEventListener('click', () => {
+      el('export-xlsx').addEventListener('click', () => {
         const rows = loadRecords();
         if(rows.length === 0) return alert('No data to export');
 
-        // En-têtes lisibles (comme dans le formulaire)
         const headerMap = {
           date: 'Date',
           channel: 'Sales channel',
@@ -649,7 +647,6 @@
           advancedMarketFees: 'Advanced market fees (UGX)'
         };
 
-        // Conversion objets internes -> colonnes lisibles
         const exportRows = rows.map(r => {
           const o = {};
           for (const [k,label] of Object.entries(headerMap)) {
@@ -670,10 +667,8 @@
       });
     </script>
 
-    <!-- Service worker (corrigé) -->
     <script>
       if ('serviceWorker' in navigator) {
-        // Si tu déploies sur GitHub Pages à /Hawking-sales/, garde ces chemins :
         navigator.serviceWorker.register('/Hawking-sales/sw.js', { scope: '/Hawking-sales/' })
           .catch(console.error);
       }
