@@ -33,7 +33,11 @@
       .grid { display:grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
       .span-12 { grid-column: span 12; }
       .span-6 { grid-column: span 12; }
-      @media (min-width: 860px){ .span-6{ grid-column: span 6; } }
+      .span-4 { grid-column: span 12; }
+      @media (min-width: 860px){
+        .span-6{ grid-column: span 6; }
+        .span-4{ grid-column: span 4; }
+      }
 
       h1 { font-size: clamp(28px, 4vw, 40px); margin: 10px 0 0; }
       h2 { font-size: 20px; margin: 0 0 12px; }
@@ -98,11 +102,19 @@
           <!-- General information -->
           <h3>General information</h3>
           <div class="row">
-            <div class="span-6">
+            <div class="span-4">
               <label for="date">Date</label>
               <input type="date" id="date" required />
             </div>
-            <div class="span-6">
+            <div class="span-4">
+              <label for="district">District</label>
+              <select id="district" required>
+                <option value="">—</option>
+                <option value="Hoima">Hoima</option>
+                <option value="Buliisa">Buliisa</option>
+              </select>
+            </div>
+            <div class="span-4">
               <label for="channel">Sales channel</label>
               <select id="channel" required>
                 <option value="">—</option>
@@ -122,7 +134,7 @@
               </select>
             </div>
 
-            <!-- SA LISTE DÉROULANTE ALPHABÉTIQUE -->
+            <!-- SA LISTE DÉROULANTE ALPHABÉTIQUE POUR HOIMA -->
             <div class="span-6">
               <label for="sa">SA name</label>
               <select id="sa" required>
@@ -145,7 +157,7 @@
           </div>
 
           <div class="row">
-            <!-- SELLING AREAS LISTE DÉROULANTE ALPHABÉTIQUE -->
+            <!-- SELLING AREAS LISTE DÉROULANTE ALPHABÉTIQUE POUR HOIMA -->
             <div class="span-12">
               <label for="area">Selling area</label>
               <select id="area" required>
@@ -268,6 +280,7 @@
             <thead>
               <tr>
                 <th>Date</th>
+                <th>District</th>
                 <th>Channel</th>
                 <th>Product</th>
                 <th>SA name</th>
@@ -331,6 +344,7 @@
       const commissionRate = el('commissionRate');
       const marketFees = el('marketFees');
       const advancedMarketFees = el('advancedMarketFees');
+      const district = el('district');
 
       const kpiDis = el('kpi-discrepancy');
       const kpiCom = el('kpi-commission');
@@ -338,6 +352,10 @@
 
       const form = el('sales-form');
       const tbody = el('tbody');
+
+      // SA & Area originals (for Hoima)
+      let saOptionsHoimaHTML = '';
+      let hoimaAreaSelect = null;
 
       el('year').textContent = new Date().getFullYear();
       el('source-link').href = '#';
@@ -381,6 +399,60 @@
         compute();
       }
 
+      function applyDistrictRules(){
+        const d = district.value;
+        const saSelect = el('sa');
+        let areaNode = el('area');
+
+        // Save original Hoima SA options once
+        if (!saOptionsHoimaHTML && saSelect) {
+          saOptionsHoimaHTML = saSelect.innerHTML;
+        }
+
+        // Save original Hoima area select once
+        if (!hoimaAreaSelect && areaNode && areaNode.tagName.toLowerCase() === 'select') {
+          hoimaAreaSelect = areaNode.cloneNode(true);
+        }
+
+        if (d === 'Buliisa') {
+          // SA name: Buliisa list
+          if (saSelect) {
+            saSelect.innerHTML = `
+            <option value="">—</option>
+            <option value="Phiona Ayumirwoth">Phiona Ayumirwoth</option>
+            <option value="Name 1">Name 1</option>
+          `;
+          }
+
+          // Selling area: free text
+          areaNode = el('area');
+          if (areaNode && areaNode.tagName.toLowerCase() === 'select') {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'area';
+            input.value = '';
+            input.required = areaNode.required;
+            input.setAttribute('placeholder','Selling area');
+            areaNode.parentNode.replaceChild(input, areaNode);
+          }
+        } else {
+          // Hoima or empty: restore SA + select Area
+          if (saSelect && saOptionsHoimaHTML) {
+            saSelect.innerHTML = saOptionsHoimaHTML;
+          }
+
+          areaNode = el('area');
+          if (areaNode && areaNode.tagName.toLowerCase() === 'input' && hoimaAreaSelect) {
+            const selectClone = hoimaAreaSelect.cloneNode(true);
+            selectClone.id = 'area';
+            selectClone.required = areaNode.required;
+            areaNode.parentNode.replaceChild(selectClone, areaNode);
+          }
+        }
+
+        updateRequired();
+      }
+
       document.addEventListener('wheel', (e) => {
         const t = e.target;
         if (t && t.tagName === 'INPUT' && t.type === 'number') {
@@ -397,6 +469,7 @@
         el('date').required = true;
 
         const requiredIds = [
+          'district',
           'channel','product','sa','area',
           'unitPrice','portionWeight','issuedPortions','closingPortions',
           'cash','commissionRate','flatRate'
@@ -415,6 +488,7 @@
         if (isFeesOnlyMode()) return true;
 
         const fields = [
+          ['district','District'],
           ['channel','Sales channel'],
           ['product','Product'],
           ['sa','SA name'],
@@ -483,32 +557,9 @@
         catch { d.value = new Date().toISOString().slice(0,10); }
       }
 
-      (function init(){
-        commissionRate.value = 20;
-        flatRate.value = 5000;
-        setToday();
-        applyChannelDefaults();
-        applyProductDefaults();
-        compute();
-        renderTable();
-        updateRequired();
-      })();
-
-      ['input','change'].forEach(evt => {
-        [product, portionWeight, issuedPortions, closingPortions, unitPrice, cash, commissionRate, flatRate]
-          .forEach(x => x.addEventListener(evt, compute));
-      });
-
-      ['change','input'].forEach(evt => product.addEventListener(evt, applyProductDefaults));
-      ['change','input'].forEach(evt => el('channel').addEventListener(evt, applyChannelDefaults));
-
-      [marketFees, advancedMarketFees].forEach(x => {
-        x.addEventListener('input', updateRequired);
-        x.addEventListener('change', updateRequired);
-      });
-
       function collectFormData(){
         const date = el('date').value;
+        const districtVal = el('district').value;
         const channel = el('channel').value;
         const prod = product.value;
         const sa = el('sa').value;
@@ -532,7 +583,7 @@
         const aFees = UGX(num(advancedMarketFees.value));
 
         return {
-          date, channel, prod, sa, area,
+          date, district: districtVal, channel, prod, sa, area,
           price, weight, issuedP, issuedK, closingP, closingK,
           cashCollected, actual, discrepancy, rate: effectiveRate,
           commission, flat, totalToPay, marketFees: mFees, advancedMarketFees: aFees
@@ -546,6 +597,7 @@
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td>${r.date}</td>
+            <td>${r.district || ''}</td>
             <td>${r.channel||''}</td>
             <td>${r.prod||''}</td>
             <td>${r.sa||''}</td>
@@ -596,6 +648,7 @@
         flatRate.value = 5000;
         applyChannelDefaults();
         applyProductDefaults(); 
+        applyDistrictRules();
         compute();
         updateRequired();
       });
@@ -607,6 +660,7 @@
         flatRate.value = 5000;
         applyChannelDefaults();
         applyProductDefaults();
+        applyDistrictRules();
         compute();
         updateRequired();
       });
@@ -626,6 +680,7 @@
 
         const headerMap = {
           date: 'Date',
+          district: 'District',
           channel: 'Sales channel',
           prod: 'Product',
           sa: 'SA name',
@@ -665,6 +720,39 @@
 
         XLSX.writeFile(wb, fname);
       });
+
+      ['input','change'].forEach(evt => {
+        [product, portionWeight, issuedPortions, closingPortions, unitPrice, cash, commissionRate, flatRate]
+          .forEach(x => x.addEventListener(evt, compute));
+      });
+
+      ['change','input'].forEach(evt => product.addEventListener(evt, applyProductDefaults));
+      ['change','input'].forEach(evt => el('channel').addEventListener(evt, applyChannelDefaults));
+      ['change','input'].forEach(evt => district.addEventListener(evt, applyDistrictRules));
+
+      [marketFees, advancedMarketFees].forEach(x => {
+        x.addEventListener('input', updateRequired);
+        x.addEventListener('change', updateRequired);
+      });
+
+      (function init(){
+        commissionRate.value = 20;
+        flatRate.value = 5000;
+        setToday();
+        applyChannelDefaults();
+        applyProductDefaults();
+        // Capture original SA & Area
+        const saSelect = el('sa');
+        const areaNode = el('area');
+        if (saSelect) saOptionsHoimaHTML = saSelect.innerHTML;
+        if (areaNode && areaNode.tagName.toLowerCase() === 'select') {
+          hoimaAreaSelect = areaNode.cloneNode(true);
+        }
+        applyDistrictRules();
+        compute();
+        renderTable();
+        updateRequired();
+      })();
     </script>
 
     <script>
