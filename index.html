@@ -415,16 +415,18 @@
         }
 
         if (d === 'Buliisa') {
-          // SA name: Buliisa list
+          // SA name: Buliisa list (avec les nouveaux noms)
           if (saSelect) {
             saSelect.innerHTML = `
-            <option value="">—</option>
-            <option value="Phiona Ayumirwoth">Phiona Ayumirwoth</option>
-            <option value="Name 1">Name 1</option>
-          `;
+              <option value="">—</option>
+              <option value="Kusemererwa Ireen">Kusemererwa Ireen</option>
+              <option value="Phiona Ayumirwoth">Phiona Ayumirwoth</option>
+              <option value="Tinkasimire Gorette">Tinkasimire Gorette</option>
+              <option value="Name 1">Name 1</option>
+            `;
           }
 
-          // Selling area: free text
+          // Selling area: free text pour Buliisa
           areaNode = el('area');
           if (areaNode && areaNode.tagName.toLowerCase() === 'select') {
             const input = document.createElement('input');
@@ -436,7 +438,7 @@
             areaNode.parentNode.replaceChild(input, areaNode);
           }
         } else {
-          // Hoima or empty: restore SA + select Area
+          // Hoima ou vide : restaurer la liste SA et le select Area
           if (saSelect && saOptionsHoimaHTML) {
             saSelect.innerHTML = saOptionsHoimaHTML;
           }
